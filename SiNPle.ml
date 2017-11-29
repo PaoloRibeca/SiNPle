@@ -140,24 +140,37 @@ let log_stirling n =
     +. (log_2_pi +. log_n) /. 2.
     +. 1. /. (12. *. f_n)
     -. 1. /. (360. *. f_n *. f_n *. f_n)
-(* IntMap stores the distribution*)
-module Integer:
-	sig
-		type t=int
-		val compare: int->int->int
-	end
-	=
-	struct
-		type t=int
-		let compare a b = a-b
-	end
 
-module IntMap: Map.S with type key = Integer.t
-  = Map.Make(Integer)
-(* --end IntMap-- *)
+module IntMap: Map.S with type key = int
+  = Map.Make(struct type t = int let compare = compare end)
 
 module StringMap: Map.S with type key = String.t
   = Map.Make(String)
+
+module Distribution:
+  sig
+    include module type of IntMap
+    val combine: key t -> key t -> key t
+    val to_string: key t -> string * string
+  end
+= struct
+    include IntMap
+    let combine = union (fun _ a b -> Some (a + b))
+    let to_string dist =
+      let res_quals = Buffer.create 1024 and res_counts = Buffer.create 1024 in
+      iter
+        (fun key value ->
+          if Buffer.length res_quals <> 0 then begin
+            Buffer.add_string res_quals ",";
+            Buffer.add_string res_counts ","
+          end;
+          Buffer.add_string res_quals (string_of_int key);
+          Buffer.add_string res_counts (string_of_int value))
+        dist;
+      Buffer.contents res_quals, Buffer.contents res_counts
+  end
+
+type distribution = int Distribution.t
 
 module Pileup:
   sig
@@ -165,7 +178,10 @@ module Pileup:
       seq: string;
       pos: int;
       refr: string;
-      info: (int * int * (int) IntMap.t) StringMap.t (*Why is the return type specified here?*)
+      (* We rely upon the fact that genotypes on the reverse strand are lowercase.
+         Data structure is:
+          genotype -> (occurencies, sum of qualities, quality distribution) *)
+      info: (int * int * distribution) StringMap.t
     }
     val from_mpileup_line: ?quality_offset:int -> string -> t
   end
@@ -174,53 +190,51 @@ module Pileup:
       seq: string;
       pos: int;
       refr: string;
-      info: (int * int * (int) IntMap.t ) StringMap.t
+      info: (int * int * distribution) StringMap.t
     }
-    let empty = StringMap.empty
-		let intmap = ref IntMap.empty
-    
-
-    let update_intmap intmap a = (*Stores distribution data*)
-    	try
-    		let t=IntMap.find a !intmap in intmap:=IntMap.add a (t+1) !intmap;intmap
-    	with Not_found-> intmap:=IntMap.add a 1 !intmap;intmap 
-
+    let update_distribution d a = (* Stores distribution data *)
+      try
+        let t = Distribution.find a d in
+        Distribution.add a (t + 1) d
+      with Not_found->
+        Distribution.add a 1 d
     let add_to stats what qual = (* map current_character current_quality *)
       try
-        let num, qsum, qsum_array = StringMap.find what stats in
-        StringMap.add what (num + 1, qsum + qual, !(update_intmap intmap qual)) stats
+        let num, qsum, distr = StringMap.find what stats in
+        (* In this case the binding gets replaced *)
+        StringMap.add what (num + 1, qsum + qual, update_distribution distr qual) stats
       with Not_found ->
-        StringMap.add what (1, qual, !(update_intmap intmap qual)) stats
+        StringMap.add what (1, qual, update_distribution Distribution.empty qual) stats
     let parsed_lines = ref 1
     let parse_error s =
       Printf.eprintf "On line %d: %s\n%!" !parsed_lines s;
       exit 1
-(*Main*)
+    (* Constructor from a line of mpileup *)
     let from_mpileup_line ?(quality_offset = 33) line =
-      let line = Array.of_list (String.split_on_char '\t' line) in (*Split fields of a pileup lines into an array*)
+      let line = Array.of_list (String.split_on_char '\t' line) in
       let len = Array.length line in
       if len < 6 then begin
         Printf.eprintf "Insufficient number of fields in input\n%!";
         exit 1
       end;
       let refr, pileup, quals = line.(2), line.(4), line.(5) in
-      if String.length refr > 1 then (*reference base can only be one char*)
-        parse_error ("Invalid reference '" ^ refr ^ "'");(*die*)
-	    let refr_uc = String.uppercase_ascii refr and refr_lc = String.lowercase_ascii refr
-      and len = String.length pileup and res = ref empty  in
+      if String.length refr > 1 then (* reference base can only be one char *)
+        parse_error ("Invalid reference '" ^ refr ^ "'");
+      let refr_uc = String.uppercase_ascii refr and refr_lc = String.lowercase_ascii refr
+      and len = String.length pileup and res = ref StringMap.empty  in
       if len > 0 then begin
         let quality_from_ascii c = Char.code c - quality_offset
-	      and i = ref 0 and qpos = ref 0 in intmap := IntMap.empty;
+        and i = ref 0 and qpos = ref 0 in
         while !i < len do
-		      let c = String.sub pileup !i 1 in
+          let c = String.sub pileup !i 1 in
           begin match c with
           | "A" | "C" | "G" | "T" | "N" | "a" | "c" | "g" | "t" | "n" ->
             res := add_to !res c (quality_from_ascii quals.[!qpos]);
-		        incr qpos
-          | "." ->(*match reference*)
+            incr qpos
+          | "." -> (* match reference *)
             res := add_to !res refr_uc (quality_from_ascii quals.[!qpos]);
             incr qpos
-          | "," ->(*match RC*)
+          | "," -> (* match RC *)
             res := add_to !res refr_lc (quality_from_ascii quals.[!qpos]);
             incr qpos
           | "+" | "-" as dir -> (* Beginning of indel *)
@@ -234,13 +248,13 @@ module Pileup:
                 true
               | _ ->
                 false
-            end do(*count indel size*)
+            end do (* count indel size *)
               ()(*why is the body empty*)
             done;
             let how_many = int_of_string !how_many in
             (* In this case the qualities will become known only at some later point *)
             res := add_to !res (dir ^ String.sub pileup !i how_many) 0;
-            i := !i + how_many - 1 (*Skip*)
+            i := !i + how_many - 1 (* Skip *)
           | "*" | ">" | "<" ->
             (* Internal part of indel, soft clips.
                Due to some mysterious reason, they all come associated with a quality *)
@@ -261,67 +275,6 @@ module Pileup:
       end;
       { seq = line.(0); pos = int_of_string line.(1); refr = refr; info = !res }
   end
-
-(* 
-	Distribution calculates the distributions from pileup, returned as an intmap.. 
-*)
-module Distribution:
-	sig
-					type distribution=(int) IntMap.t
-					val positive_dist : string->Pileup.t->(int) IntMap.t
-					val negative_dist : string->Pileup.t->(int) IntMap.t
-					val find_dist : string->Pileup.t->(int) IntMap.t
-					val total_dist : string->Pileup.t->(int) IntMap.t
-					val print_dist : (int) IntMap.t->string
-	end
-	=struct
-	type distribution=(int) IntMap.t
-	type histogram={qual:string;count:string}
-
-(* Get the positive strand distribution, case of the nucleotide is disregarded *)
-	let positive_dist nucleotide pileup = 
-		try 
-				let map=StringMap.find (String.uppercase_ascii nucleotide) pileup.Pileup.info in
-								let (_,_,imap)=map in imap
-		with Not_found->IntMap.empty
-
-(* Get the minus strand distribution, case of the nucleotide is disregarded *)
-	let negative_dist nucleotide pileup = 
-		try 
-				let map=StringMap.find (String.lowercase_ascii nucleotide) pileup.Pileup.info in
-								let (_,_,imap)=map in imap
-		with Not_found->IntMap.empty
-
-(* Get the strand distribution, strand depends on the case of the nucleotide *)
-	let find_dist nucleotide pileup = 
-		try 
-				let map=StringMap.find nucleotide pileup.Pileup.info in
-						let (_,_,imap)=map in imap
-		with Not_found->IntMap.empty
-
-(* add two distributions *) 
-	let add_dist imap1 imap2 = let temp_imap=ref imap2 in IntMap.iter (fun key value -> try 
-																					let value2=IntMap.find key imap2 in 
-																					   temp_imap:=IntMap.add key (value+value2) imap2
-																					with Not_found->()
-																					)  imap1;
-																					!temp_imap 
-(* find strand independant distribution *) 
-  let total_dist nucleotide pileup= let lc=String.lowercase_ascii nucleotide in
-														  let uc=String.uppercase_ascii lc in
-															let imap1=find_dist uc pileup and imap2=find_dist lc pileup in
-														  add_dist imap1 imap2	
-(* Print a distribution *)
-  let print_dist dist = let a=(fun dist-> let temp_q=ref "" in 
-																	let temp_count=ref "" in 
-																	IntMap.iter  (fun key value->temp_q:=!temp_q^(if !temp_q="" then "" else ",")^(string_of_int key);temp_count:=!temp_count^(if !temp_count="" then "" else ",")^(string_of_int value)) dist;
-																	(*IntMap.iter  (fun key value->temp_q:=!temp_q^(if !temp_q="" then "" else ",")^(Printf.sprintf "%c" (Char.chr (key+33)));temp_count:=!temp_count^(if !temp_count="" then "" else ",")^(string_of_int value)) dist;*)
-																	{qual= !temp_q;count= !temp_count}
-															) dist 
-															in Printf.sprintf "%s\t%s" a.qual a.count
-
-	end
-(* --end Distribution -- *)
 
 module Strandedness:
   sig
@@ -355,7 +308,8 @@ module Genotype:
     type genobase_t = {
       symbol: string;
       counts: int;
-      quals: int
+      quals: int;
+      distr: distribution
     }
     type t = {
       seq: string;
@@ -368,7 +322,8 @@ module Genotype:
     type genobase_t = {
       symbol: string;
       counts: int;
-      quals: int
+      quals: int;
+      distr: distribution
     }
     type t = {
       seq: string;
@@ -382,32 +337,35 @@ module Genotype:
       | Strandedness.Forward ->
         (* Eliminate lowercase *)
         StringMap.iter
-          (fun s (counts, quals,qual_array) ->
+          (fun s (counts, quals, distr) ->
             if String.lowercase_ascii s <> s then
-              res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals } :: !res)
+              res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals; distr = distr } :: !res)
           pileup.Pileup.info
       | Strandedness.Reverse ->
         (* Eliminate uppercase, and turn lowercase to uppercase *)
         StringMap.iter
-          (fun s (counts, quals,qual_array) ->
+          (fun s (counts, quals, distr) ->
             if String.uppercase_ascii s <> s then
-              res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals } :: !res)
+              res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals; distr = distr } :: !res)
           pileup.Pileup.info             
       | Strandedness.Both ->
         (* Sum lowercase to uppercase, eliminate lowercase *)
         let new_info = ref StringMap.empty in
         StringMap.iter
-          (fun s (counts, quals,qual_array) ->
+          (fun s (counts, quals, distr) ->
             let upp = String.uppercase_ascii s in
             try
-              let counts_upp, quals_upp = StringMap.find upp !new_info in
-              new_info := StringMap.add upp (counts_upp + counts, quals_upp + quals) !new_info
+              let counts_upp, quals_upp, distr_upp = StringMap.find upp !new_info in
+              new_info :=
+                StringMap.add upp
+                  (counts_upp + counts, quals_upp + quals, Distribution.combine distr_upp distr)
+                  !new_info
             with Not_found ->
-              new_info := StringMap.add upp (counts, quals) !new_info)
+              new_info := StringMap.add upp (counts, quals, distr) !new_info)
           pileup.Pileup.info;
         StringMap.iter
-          (fun s (counts, quals) ->
-            res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals } :: !res)
+          (fun s (counts, quals, distr) ->
+            res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals; distr = distr } :: !res)
           !new_info
       end;
       let res = Array.of_list !res in
@@ -529,16 +487,13 @@ let _ =
       Printf.fprintf output "%s\t%d" genotype.Genotype.seq genotype.Genotype.pos;
       Array.iter
         (fun g ->
-				  let dist= Distribution.positive_dist g.Genotype.symbol pileup in 
-					let histogram=Distribution.print_dist dist in 
-          Printf.fprintf output "\t%s\t%d\t%.3g\t%s"
-            g.Genotype.symbol g.Genotype.counts (zero_if_div_by_zero g.Genotype.quals g.Genotype.counts) histogram)
+          let d_quals, d_counts = Distribution.to_string g.Genotype.distr in
+          Printf.fprintf output "\t%s\t%d\t%.3g\t%s\t%s"
+            g.Genotype.symbol g.Genotype.counts (zero_if_div_by_zero g.Genotype.quals g.Genotype.counts) d_quals d_counts)
         genotype.Genotype.info ;
       Printf.fprintf output "\t%.3g\n%!" (lucas genotype.Genotype.info !Params.theta)
 
     done
-
-
 
   with End_of_file -> ()
 
