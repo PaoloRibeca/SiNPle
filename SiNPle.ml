@@ -177,7 +177,8 @@ module Pileup:
       info: (int * int * (int) IntMap.t ) StringMap.t
     }
     let empty = StringMap.empty
-    let intmap = ref IntMap.empty
+		let intmap = ref IntMap.empty
+    
 
     let update_intmap intmap a = (*Stores distribution data*)
     	try
@@ -206,10 +207,10 @@ module Pileup:
       if String.length refr > 1 then (*reference base can only be one char*)
         parse_error ("Invalid reference '" ^ refr ^ "'");(*die*)
 	    let refr_uc = String.uppercase_ascii refr and refr_lc = String.lowercase_ascii refr
-      and len = String.length pileup and res = ref empty in
+      and len = String.length pileup and res = ref empty  in
       if len > 0 then begin
         let quality_from_ascii c = Char.code c - quality_offset
-	      and i = ref 0 and qpos = ref 0 in
+	      and i = ref 0 and qpos = ref 0 in intmap := IntMap.empty;
         while !i < len do
 		      let c = String.sub pileup !i 1 in
           begin match c with
@@ -313,8 +314,8 @@ module Distribution:
 (* Print a distribution *)
   let print_dist dist = let a=(fun dist-> let temp_q=ref "" in 
 																	let temp_count=ref "" in 
-																	(*IntMap.iter  (fun key value->temp_q:=!temp_q^(if !temp_q="" then "" else ",")^(string_of_int key);temp_count:=!temp_count^(if !temp_count="" then "" else ",")^(string_of_int value)) dist;*)
-																	IntMap.iter  (fun key value->temp_q:=!temp_q^(if !temp_q="" then "" else ",")^(Printf.sprintf "%c" (Char.chr (key+33)));temp_count:=!temp_count^(if !temp_count="" then "" else ",")^(string_of_int value)) dist;
+																	IntMap.iter  (fun key value->temp_q:=!temp_q^(if !temp_q="" then "" else ",")^(string_of_int key);temp_count:=!temp_count^(if !temp_count="" then "" else ",")^(string_of_int value)) dist;
+																	(*IntMap.iter  (fun key value->temp_q:=!temp_q^(if !temp_q="" then "" else ",")^(Printf.sprintf "%c" (Char.chr (key+33)));temp_count:=!temp_count^(if !temp_count="" then "" else ",")^(string_of_int value)) dist;*)
 																	{qual= !temp_q;count= !temp_count}
 															) dist 
 															in Printf.sprintf "%s\t%s" a.qual a.count
