@@ -401,6 +401,31 @@ module Params =
 
 let version = "0.1"
 
+let calculate_stats gtype_info = let i=ref 0 and tot = ref 0 and f=Array.make 8 0. in Array.iter
+					(fun v ->
+							tot:=!tot + v.Genotype.counts;
+							match v.Genotype.symbol with  
+							|"a"|"c"|"g"|"t"|"A"|"C"|"G"|"T" -> (* We only consider SNP variations*)
+									f.(!i) <- float_of_int v.Genotype.counts;i := !i + 1;() 
+							|_ -> ()
+					)
+					gtype_info;
+(*
+
+	We calculate the formulas m1 = f_2.f_3/f_1, m2 = (1-f_1)f_3/f_1 and m3 = f_2^2/f_4 
+
+*)
+(* DBG:Array.iteri (fun a b -> Printf.fprintf stderr "%i -- %.3g," a b) f;Printf.fprintf stderr "\n";*)
+						let m1=ref (-1.) and  m2 = ref (-1.) and m3 = ref (-1.) in
+							match !i with
+							|0|1 -> (!m1,!m2,!m3)  
+							|2 -> m1 := f.(1) *. f.(2) /. f.(0); m2 := (1. -. f.(0)) *. f.(2) /. f.(0); (!m1,!m2,!m3)  
+							|_ -> m1 := f.(1) *. f.(2) /. f.(0); m2 := (1. -. f.(0)) *. f.(2) /. f.(0); m3 := f.(1) *. f.(1)/. f.(3); (!m1,!m2,!m3)    
+
+
+
+
+
 let _ =
   Printf.eprintf "This is the SiNPle SNP calling program (version %s)\n%!" version;
   Printf.eprintf " (c) 2017 Luca Ferretti, <luca.ferretti@gmail.com>\n%!";
@@ -481,17 +506,19 @@ let _ =
       end else
         0. in
   try
+		Printf.fprintf output "#Sequence_Name\tPosition\tTheta\tM1\tM2\tM3\tGenotype\tCount_of_Genotype\tAverage_Quality\tQuality_Scores\tQuality_Score_Frequencies\n";
     while true do
       let pileup = Pileup.from_mpileup_line (input_line input) in
       let genotype = Genotype.from_pileup pileup !Params.strandedness in
-      Printf.fprintf output "%s\t%d" genotype.Genotype.seq genotype.Genotype.pos;
+      let m1, m2, m3 = (calculate_stats genotype.Genotype.info) in 
+			Printf.fprintf output "%s\t%d\t%.3g\t%.3g\t%.3g\t%.3g" genotype.Genotype.seq genotype.Genotype.pos (lucas genotype.Genotype.info !Params.theta) m1 m2 m3;
       Array.iter
         (fun g ->
           let d_quals, d_counts = Distribution.to_string g.Genotype.distr in
           Printf.fprintf output "\t%s\t%d\t%.3g\t%s\t%s"
             g.Genotype.symbol g.Genotype.counts (zero_if_div_by_zero g.Genotype.quals g.Genotype.counts) d_quals d_counts)
         genotype.Genotype.info ;
-      Printf.fprintf output "\t%.3g\n%!" (lucas genotype.Genotype.info !Params.theta)
+      Printf.fprintf output "\n"; 
 
     done
 
