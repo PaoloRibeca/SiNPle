@@ -415,9 +415,10 @@ let calculate_stats gtype_info = let i=ref 0 and tot = ref 0 and f=Array.make 8 
 	We calculate the formulas m1 = f_2.f_3/f_1, m2 = (1-f_1)f_3/f_1 and m3 = f_2^2/f_4 
 
 *)
-(* DBG:Array.iteri (fun a b -> Printf.fprintf stderr "%i -- %.3g," a b) f;Printf.fprintf stderr "\n";*)
+(* DBG:Array.iteri (fun a b -> Printf.fprintf stderr "%i -- %.3g, " a b) f;Printf.fprintf stderr "\n";*)
+					let f=Array.map (fun x -> x /. float_of_int !tot) f in
 						let m1=ref (-1.) and  m2 = ref (-1.) and m3 = ref (-1.) in
-							match !i with
+							match (!i-1) with
 							|0|1 -> (!m1,!m2,!m3)  
 							|2 -> m1 := f.(1) *. f.(2) /. f.(0); m2 := (1. -. f.(0)) *. f.(2) /. f.(0); (!m1,!m2,!m3)  
 							|_ -> m1 := f.(1) *. f.(2) /. f.(0); m2 := (1. -. f.(0)) *. f.(2) /. f.(0); m3 := f.(1) *. f.(1)/. f.(3); (!m1,!m2,!m3)    
