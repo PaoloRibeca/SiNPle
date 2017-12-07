@@ -157,7 +157,7 @@ module Distribution:
 = struct
     include IntMap
     let combine = union (fun _ a b -> Some (a + b))
-		let tab_sep a b = if a="" then b else a^"\t"^b
+    let tab_sep a b = if a="" then b else a^"\t"^b
 
     let to_string dist =
       let res_quals = Buffer.create 1024 and res_counts = Buffer.create 1024 in
@@ -173,13 +173,13 @@ module Distribution:
       Buffer.contents res_quals, Buffer.contents res_counts
 
     let to_tsv dist =
-		let res = ref "" in
-		for i = 0 to 80 do
-			try 
-				let qv = IntMap.find i dist in res := tab_sep !res  (string_of_int qv);
-			with Not_found -> res := tab_sep !res "0"
-		done;
-		!res
+    let res = ref "" in
+    for i = 0 to 80 do
+      try 
+        let qv = IntMap.find i dist in res := tab_sep !res  (string_of_int qv);
+      with Not_found -> res := tab_sep !res "0"
+    done;
+    !res
 
 
   end
@@ -416,26 +416,26 @@ module Params =
 let version = "0.1"
 
 let calculate_stats gtype_info = let i=ref 0 and tot = ref 0 and f=Array.make 8 0. in Array.iter
-					(fun v ->
-							tot:=!tot + v.Genotype.counts;
-							match v.Genotype.symbol with  
-							|"a"|"c"|"g"|"t"|"A"|"C"|"G"|"T" -> (* We only consider SNP variations*)
-									f.(!i) <- float_of_int v.Genotype.counts;i := !i + 1;() 
-							|_ -> ()
-					)
-					gtype_info;
+          (fun v ->
+              tot:=!tot + v.Genotype.counts;
+              match v.Genotype.symbol with  
+              |"a"|"c"|"g"|"t"|"A"|"C"|"G"|"T" -> (* We only consider SNP variations*)
+                  f.(!i) <- float_of_int v.Genotype.counts;i := !i + 1;() 
+              |_ -> ()
+          )
+          gtype_info;
 (*
 
-	We calculate the formulas m1 = f_2.f_3/f_1, m2 = (1-f_1)f_3/f_1 and m3 = f_2^2/f_4 
+  We calculate the formulas m1 = f_2.f_3/f_1, m2 = (1-f_1)f_3/f_1 and m3 = f_2^2/f_4 
 
 *)
 (* DBG:Array.iteri (fun a b -> Printf.fprintf stderr "%i -- %.3g, " a b) f;Printf.fprintf stderr "\n";*)
-					let f=Array.map (fun x -> x /. float_of_int !tot) f in
-						let m1=ref (-1.) and  m2 = ref (-1.) and m3 = ref (-1.) in
-							match (!i-1) with
-							|0|1 -> (!m1,!m2,!m3)  
-							|2 -> m1 := f.(1) *. f.(2) /. f.(0); m2 := (1. -. f.(0)) *. f.(2) /. f.(0); (!m1,!m2,!m3)  
-							|_ -> m1 := f.(1) *. f.(2) /. f.(0); m2 := (1. -. f.(0)) *. f.(2) /. f.(0); m3 := f.(1) *. f.(1)/. f.(3); (!m1,!m2,!m3)    
+          let f=Array.map (fun x -> x /. float_of_int !tot) f in
+            let m1=ref (-1.) and  m2 = ref (-1.) and m3 = ref (-1.) in
+              match (!i-1) with
+              |0|1 -> (!m1,!m2,!m3)  
+              |2 -> m1 := f.(1) *. f.(2) /. f.(0); m2 := (1. -. f.(0)) *. f.(2) /. f.(0); (!m1,!m2,!m3)  
+              |_ -> m1 := f.(1) *. f.(2) /. f.(0); m2 := (1. -. f.(0)) *. f.(2) /. f.(0); m3 := f.(1) *. f.(1)/. f.(3); (!m1,!m2,!m3)    
 
 
 
@@ -520,39 +520,49 @@ let _ =
         end
       end else
         0. in
-	let triplet = [|"_";"_";"_"|] and lastline = ref "" in
+  let triplet = [|"_";"_";"_"|] and lastline = ref "" and last_pos = ref 0 in
   try
 
-		Printf.fprintf output "#Sequence_Name\tPosition\tBase_1\tBase_2\tBase_3\tBase_4\tCount_1\tCount_2\tCount_3\tCount4\tQual_1\tQual_2\tQual_3\tQual_4\tHist_1\tHist_2\tHist_3\tHist_4\tTriplet\n";
+    Printf.fprintf output "#Sequence_Name\tPosition\tBase_1\tBase_2\tBase_3\tBase_4\tCount_1\tCount_2\tCount_3\tCount4\tQual_1\tQual_2\tQual_3\tQual_4\tHist_1\tHist_2\tHist_3\tHist_4\tTriplet\n";
     while true do
-			let bases = [|"";"";"";""|] and counts = [|0;0;0;0|] and quals = [|0.;0.;0.;0.|] and histo = [|"";"";"";""|]  and i = ref 0 in
+      let bases = [|"";"";"";""|] and counts = [|0;0;0;0|] and quals = [|0.;0.;0.;0.|] and histo = [|"";"";"";""|]  and i = ref 0 in
       let pileup = Pileup.from_mpileup_line (input_line input) in
       let genotype = Genotype.from_pileup pileup !Params.strandedness in
-			i:=0;
+      i:=0;
       Array.iter
         (fun g ->
-					match g.Genotype.symbol with  
-					|"a"|"c"|"g"|"t"|"A"|"C"|"G"|"T" -> 
-							bases.(!i) <- g.Genotype.symbol;
-							counts.(!i) <- g.Genotype.counts;
-							quals.(!i) <- (zero_if_div_by_zero g.Genotype.quals g.Genotype.counts);
-							histo.(!i) <- Distribution.to_tsv g.Genotype.distr;
-							i := !i + 1
-					|_ ->()
-					)
+          match g.Genotype.symbol with  
+          |"a"|"c"|"g"|"t"|"A"|"C"|"G"|"T" -> 
+              bases.(!i) <- g.Genotype.symbol;
+              counts.(!i) <- g.Genotype.counts;
+              quals.(!i) <- (zero_if_div_by_zero g.Genotype.quals g.Genotype.counts);
+              histo.(!i) <- Distribution.to_tsv g.Genotype.distr;
+              i := !i + 1
+          |_ ->()
+          )
         genotype.Genotype.info;
 
-				if ( !i < 4 ) then for j = !i to 3 do histo.(j) <- Distribution.to_tsv Distribution.empty done;
-				if !lastline = "" then (* find the triplet consisting of the current base and the adjacent  bases of the current base .. *)
-						triplet.(1) <- bases.(0)
-				else
-					begin
-						triplet.(2) <- if bases.(0) = "" then "_" else bases.(0);
-						Printf.fprintf output "%s\t%s\n" !lastline  (triplet.(0)^triplet.(1)^triplet.(2));
-						triplet.(0) <- triplet.(1); triplet.(1) <- triplet.(2)
-					end;
+        if ( !i < 4 ) then for j = !i to 3 do histo.(j) <- Distribution.to_tsv Distribution.empty done;
 
-				lastline := Printf.sprintf "%s\t%d\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%.3g\t%.3g\t%.3g\t%.3g\t%s\t%s\t%s\t%s" genotype.Genotype.seq genotype.Genotype.pos bases.(0) bases.(1) bases.(2) bases.(3) counts.(0) counts.(1) counts.(2) counts.(3) quals.(0) quals.(1) quals.(2) quals.(3) histo.(0) histo.(1) histo.(2) histo.(3);
+        if genotype.Genotype.pos <= !last_pos then (Printf.fprintf stderr " Unsorted Pileup at line %i: exiting..\n", !last_pos; exit 1);
+
+        if genotype.Genotype.pos != (!last_pos + 1) then (*Since lines are not consecutive, we cannot find a triplet*)
+          ( 
+            Printf.fprintf output "%s\t%s\n" !lastline  (triplet.(0)^triplet.(1)^"_");
+            lastline := ""; triplet.(0) <- "_"; triplet.(1) <- "_" ; triplet.(2) <- "_"
+          );
+        last_pos := genotype.Genotype.pos;
+
+        if !lastline = "" then (* find the triplet consisting of the current base and the adjacent  bases of the current base .. *)
+            triplet.(1) <- bases.(0)
+        else
+          begin
+            triplet.(2) <- if bases.(0) = "" then "_" else bases.(0);
+            Printf.fprintf output "%s\t%s\n" !lastline  (triplet.(0)^triplet.(1)^triplet.(2));
+            triplet.(0) <- triplet.(1); triplet.(1) <- triplet.(2)
+          end;
+
+        lastline := Printf.sprintf "%s\t%d\t%s\t%s\t%s\t%s\t%i\t%i\t%i\t%i\t%.3g\t%.3g\t%.3g\t%.3g\t%s\t%s\t%s\t%s" genotype.Genotype.seq genotype.Genotype.pos bases.(0) bases.(1) bases.(2) bases.(3) counts.(0) counts.(1) counts.(2) counts.(3) quals.(0) quals.(1) quals.(2) quals.(3) histo.(0) histo.(1) histo.(2) histo.(3);
 
     done
 
