@@ -548,8 +548,11 @@ let _ =
 
         if genotype.Genotype.pos != (!last_pos + 1) then (*Since lines are not consecutive, we cannot find a triplet*)
           ( 
-            Printf.fprintf output "%s\t%s\n" !lastline  (triplet.(0)^triplet.(1)^"_");
-            lastline := ""; triplet.(0) <- "_"; triplet.(1) <- "_" ; triplet.(2) <- "_"
+            if(!last_pos >0) then (* Dont want to print first blank line*)
+            (
+              Printf.fprintf output "%s\t%s\n" !lastline  (triplet.(0)^triplet.(1)^"_");
+              lastline := ""; triplet.(0) <- "_"; triplet.(1) <- "_" ; triplet.(2) <- "_"
+            )
           );
         last_pos := genotype.Genotype.pos;
 
