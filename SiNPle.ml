@@ -1,3 +1,5 @@
+(* *)
+
 module Argv:
   sig
     type class_t =
@@ -147,38 +149,6 @@ module IntMap: Map.S with type key = int
 module StringMap: Map.S with type key = String.t
   = Map.Make(String)
 
-module Distribution:
-  sig
-    type t = int IntMap.t
-    val add_to: ?n:int -> t -> int -> t
-    val merge: t -> t -> t
-    val length: t -> int
-
-  end
-= struct
-    type t = int IntMap.t
-    let add_to ?(n = 1) this q =
-      try
-        let found = IntMap.find q this in
-        IntMap.add q (found + n) this
-      with Not_found ->
-        IntMap.add q n this
-    let merge a b =
-      let res = ref a in
-      IntMap.iter
-        (fun q n ->
-          res := add_to !res q ~n)
-        b;
-      !res
-    let length this =
-      let res = ref 0 in
-      IntMap.iter
-        (fun _ n ->
-          res := !res + n)
-        this
-
-  end
-
 module Strand:
   sig
     type t =
@@ -190,33 +160,6 @@ module Strand:
       | Forward
       | Reverse
   end
-
-module Qualities:
-  sig
-    type t = {
-      pos: Distribution.t;
-      neg: Distribution.t
-    }
-    val add_to: ?n:int -> t -> Strand.t -> int -> t
-
-
-  end
-= struct
-    type t = {
-      pos: Distribution.t;
-      neg: Distribution.t
-    }
-    let add_to ?(n = 1) this strand q =
-      match strand with
-      | Strand.Forward ->
-        { pos = Distribution.add_to this.pos q ~n; neg = this.neg }
-      | Strand.Reverse ->
-        { pos = this.pos; neg = Distribution.add_to this.neg q ~n }
-
-
-  end
-
-
 
 module Pileup:
   sig
@@ -430,12 +373,13 @@ module Params =
     let strandedness = ref Defaults.strandedness
   end
 
-let version = "0.1"
+let version = "0.2"
 
 let _ =
   Printf.eprintf "This is the SiNPle SNP calling program (version %s)\n%!" version;
-  Printf.eprintf " (c) 2017 Luca Ferretti, <luca.ferretti@gmail.com>\n%!";
-  Printf.eprintf " (c) 2017 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
+  Printf.eprintf " (c) 2017-2018 Luca Ferretti, <luca.ferretti@gmail.com>\n%!";
+  Printf.eprintf " (c) 2017-2018 Chandana Tennakoon, <drcyber@gmail.com>\n%!";
+  Printf.eprintf " (c) 2017-2018 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
   Argv.parse [
     [], None, [ "=== Algorithmic parameters ===" ], Argv.Optional, (fun _ -> ());
     [ "-t"; "-T"; "--theta" ],
@@ -481,51 +425,48 @@ let _ =
       float_of_int a /. float_of_int b
     else
       0.
-  and lucas info theta =
-    match info with
-    | [||] | [|_|] -> 0.
-    | x ->
-      let fst = x.(0) and snd = x.(1) in
-      if snd.Genotype.counts > 0 then begin
-        let c_f_fst = float_of_int fst.Genotype.counts
-        and c_f_snd = float_of_int snd.Genotype.counts in
-        let q_fst = (float_of_int fst.Genotype.quals (*/. c_f_fst*)) /. 10.
-        and q_snd = (float_of_int snd.Genotype.quals (*/. c_f_snd*)) /. 10. in
-        let q_min = min q_fst q_snd
-        and q_max = max q_fst q_snd
-        and log10 = log 10. in
-        exp begin
-          -. log1p begin
-            begin
-              exp begin
-                log_stirling (fst.Genotype.counts + snd.Genotype.counts)
-                  -. log_stirling fst.Genotype.counts -. log_stirling snd.Genotype.counts
-                  -. q_min *. log10 +. log1p (10. ** (q_min -. q_max))
-              end
+  and lucas fst snd theta =
+    if snd.Genotype.counts > 0 then begin
+      let c_f_fst = float_of_int fst.Genotype.counts
+      and c_f_snd = float_of_int snd.Genotype.counts in
+      let q_fst = (float_of_int fst.Genotype.quals (*/. c_f_fst*)) /. 10.
+      and q_snd = (float_of_int snd.Genotype.quals (*/. c_f_snd*)) /. 10. in
+      let q_min = min q_fst q_snd
+      and q_max = max q_fst q_snd
+      and log10 = log 10. in
+      exp begin
+        -. log1p begin
+          begin
+            exp begin
+              log_stirling (fst.Genotype.counts + snd.Genotype.counts)
+                -. log_stirling fst.Genotype.counts -. log_stirling snd.Genotype.counts
+                -. q_min *. log10 +. log1p (10. ** (q_min -. q_max))
             end
-              /. begin
-                ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
-                *. theta
-              end
           end
+            /. begin
+              ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
+              *. theta
+            end
         end
-      end else
-        0. in
+      end
+    end else
+      0. in
   try
     while true do
       let pileup = Pileup.from_mpileup_line (input_line input) in
       let genotype = Genotype.from_pileup pileup !Params.strandedness in
       Printf.fprintf output "%s\t%d" genotype.Genotype.seq genotype.Genotype.pos;
-      Array.iter
-        (fun g ->
-          Printf.fprintf output "\t%s\t%d\t%.3g"
-            g.Genotype.symbol g.Genotype.counts (zero_if_div_by_zero g.Genotype.quals g.Genotype.counts))
+      Array.iteri
+        (fun i g ->
+          Printf.fprintf output "\t%s\t%d\t%.3g\t%.3g"
+            g.Genotype.symbol g.Genotype.counts (zero_if_div_by_zero g.Genotype.quals g.Genotype.counts) begin
+              if i = 0 then
+                1.
+              else
+                lucas genotype.Genotype.info.(0) g !Params.theta
+            end)
         genotype.Genotype.info;
-      Printf.fprintf output "\t%.3g\n%!" (lucas genotype.Genotype.info !Params.theta)
-
+      Printf.fprintf output "\n%!"
     done
-
-
-
   with End_of_file -> ()
 
