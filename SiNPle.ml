@@ -391,18 +391,18 @@ module Genotype:
                   -. log_stirling fst.counts -. log_stirling snd.counts
                   -. log10 *. float_of_int begin
                     if is_indel then
-                      parameters.q_indel_eff
+                      float_of_int parameters.q_indel_eff *. c_f_snd /. 10.
                     else
-                      parameters.q_eff
+                      float_of_int parameters.q_eff *. c_f_snd /. 10.
                   end
               end +.
               exp begin
-                -. q_min *. log10 +. log1p (10. ** (q_min -. q_max))
+                -. q_snd *. log10
               end +. begin
                 if is_indel then
                   0.
                 else
-                  2. *. (parameters.pcr_error *. (c_f_fst +. c_f_snd) /. ((min c_f_fst c_f_snd) ** 2.))
+                  2. *. (parameters.pcr_error *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.))
               end
             end
               /. begin
