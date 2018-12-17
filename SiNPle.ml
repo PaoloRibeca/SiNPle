@@ -376,12 +376,8 @@ module Genotype:
           | _ -> false in
         let c_f_snd = float_of_int snd.counts in
         let c_f_fst = float_of_int fst.counts -. c_f_snd in
-        let soq_fst = QualitiesDistribution.get_sum fst.quals
-        and soq_snd = QualitiesDistribution.get_sum snd.quals in
-        let q_snd = (float_of_int soq_snd (*/. c_f_snd*)) /. 10. in
-        let q_fst = (float_of_int soq_fst (*/. c_f_fst*)) /. 10. -. q_snd in
-        let q_min = min q_fst q_snd
-        and q_max = max q_fst q_snd
+        let soq_snd = QualitiesDistribution.get_sum snd.quals in
+        let q_snd = (float_of_int soq_snd (*/. c_f_snd*)) /. 10.
         and log10 = log 10. in
         exp begin
           -. log1p begin
@@ -391,10 +387,10 @@ module Genotype:
                   -. log_stirling fst.counts -. log_stirling snd.counts
                   -. log10 *. float_of_int begin
                     if is_indel then
-                      float_of_int parameters.q_indel_eff *. c_f_snd /. 10.
+                      parameters.q_indel_eff
                     else
-                      float_of_int parameters.q_eff *. c_f_snd /. 10.
-                  end
+                      parameters.q_eff
+                  end *. c_f_snd /. 10.
               end +.
               exp begin
                 -. q_snd *. log10
