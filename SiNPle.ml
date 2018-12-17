@@ -138,6 +138,13 @@ module IntMap: Map.S with type key = int
 module QualitiesDistribution =
   struct
     include IntMap
+    let get_cardinal qs =
+      let res = ref 0 in
+      IntMap.iter
+        (fun _ times ->
+          res := !res + times)
+        qs;
+      !res
     let get_sum qs =
       let res = ref 0 in
       IntMap.iter
@@ -145,6 +152,16 @@ module QualitiesDistribution =
           res := !res + times * qual)
         qs;
       !res
+    let get_variance qs =
+      let card = get_cardinal qs in
+      let mean = float_of_int (get_sum qs) /. float_of_int card in
+      let res = ref 0 in
+      IntMap.iter
+        (fun qual times ->
+          res := !res + times * qual * qual)
+        qs;
+      let f_red_card = float_of_int (card - 1) in
+      float_of_int !res /. f_red_card -. mean *. mean *. (f_red_card +. 1.) /. f_red_card
     let merge qs_1 qs_2 =
       let res = ref qs_1 in
       IntMap.iter
@@ -376,24 +393,71 @@ module Genotype:
           | _ -> false in
         let c_f_snd = float_of_int snd.counts in
         let c_f_fst = float_of_int fst.counts -. c_f_snd in
-        let soq_snd = QualitiesDistribution.get_sum snd.quals in
-        let q_snd = (float_of_int soq_snd (*/. c_f_snd*)) /. 10.
-        and log10 = log 10. in
+        let var_fst = QualitiesDistribution.get_variance fst.quals
+        and soq_fst = QualitiesDistribution.get_sum fst.quals
+        and soq_snd = QualitiesDistribution.get_sum snd.quals in
+        let q_fst = (float_of_int soq_fst) /. 10.
+        and q_snd = (float_of_int soq_snd) /. 10.
+        and pi = 4. *. atan 1. and log10 = log 10. in
+
+Printf.eprintf "'%s': q_snd=%g\tall=%d\tc_f_fst=%g\tc_f_snd=%g\tfirst=%g\tsecond=%g\tthird=%g\tfour=%g\n%!" snd.symbol q_snd fst.counts c_f_fst c_f_snd begin
+                +. log_stirling (fst.counts + snd.counts)
+                -. log_stirling fst.counts -. log_stirling snd.counts
+                -. log10 *. float_of_int begin
+                  if is_indel then
+                    parameters.q_indel_eff
+                  else
+                    parameters.q_eff
+                end *. c_f_snd /. 10.
+end begin
+                -. log10 *. begin
+                  if is_indel then
+                    float_of_int parameters.q_indel_eff *. c_f_snd /. 10.
+                  else
+                    q_snd
+                end
+end begin
+                if is_indel then
+                  0.
+                else
+                  2. *. (parameters.pcr_error *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.))
+end begin
+                exp begin
+                  -. begin
+                    let what = 10. *. (q_snd /. c_f_snd -. q_fst /. (c_f_fst +. c_f_snd)) in
+                    what *. what
+                  end /. 2. /. var_fst *. c_f_snd
+                end
+                /. sqrt (2. *. pi *. var_fst *. c_f_snd)
+                *. ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
+                *. begin
+                  if is_indel then
+                    parameters.theta_indel
+                  else
+                    parameters.theta
+                end
+end;
+
         exp begin
           -. log1p begin
             begin
               exp begin
-                log_stirling (fst.counts + snd.counts)
-                  -. log_stirling fst.counts -. log_stirling snd.counts
-                  -. log10 *. float_of_int begin
-                    if is_indel then
-                      parameters.q_indel_eff
-                    else
-                      parameters.q_eff
-                  end *. c_f_snd /. 10.
+                +. log_stirling (fst.counts + snd.counts)
+                -. log_stirling fst.counts -. log_stirling snd.counts
+                -. log10 *. float_of_int begin
+                  if is_indel then
+                    parameters.q_indel_eff
+                  else
+                    parameters.q_eff
+                end *. c_f_snd /. 10.
               end +.
               exp begin
-                -. q_snd *. log10
+                -. log10 *. begin
+                  if is_indel then
+                    float_of_int parameters.q_indel_eff *. c_f_snd /. 10.
+                  else
+                    q_snd
+                end
               end +. begin
                 if is_indel then
                   0.
@@ -402,7 +466,14 @@ module Genotype:
               end
             end
               /. begin
-                ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
+                exp begin
+                  -. begin
+                    let what = 10. *. q_snd /. c_f_snd -. q_fst /. (c_f_fst +. c_f_snd) in
+                    what *. what
+                  end /. 2. /. var_fst *. c_f_snd
+                end
+                /. sqrt (2. *. pi *. var_fst *. c_f_snd)
+                *. ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
                 *. begin
                   if is_indel then
                     parameters.theta_indel
@@ -545,7 +616,7 @@ module Params =
     let q_indel = ref Defaults.q_indel
     let pcr_error = ref Defaults.pcr_error
     let q_eff = ref Defaults.q_eff
-    let q_indel_eff = ref Defaults.q_eff
+    let q_indel_eff = ref Defaults.q_indel
     let strandedness = ref Defaults.strandedness
   end
 
@@ -578,12 +649,12 @@ let _ =
       [ "prior estimate of PCR error level" ],
       Argv.Default (fun () -> string_of_float !Params.pcr_error),
       (fun _ -> Params.pcr_error := Argv.get_non_neg_float_parameter ());
-    [ "--effettive-quality" ],
+    [ "--effective-quality" ],
       Some "<non_negative_integer>",
       [ "...whatever that is..." ],
       Argv.Default (fun () -> string_of_int !Params.q_eff),
       (fun _ -> Params.q_eff := Argv.get_non_neg_int_parameter ());
-    [ "--effettive-indel-quality" ],
+    [ "--effective-indel-quality" ],
       Some "<non_negative_integer>",
       [ "...whatever that is..." ],
       Argv.Default (fun () -> string_of_int !Params.q_indel_eff),
