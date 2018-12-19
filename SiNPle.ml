@@ -145,6 +145,24 @@ module QualitiesDistribution =
           res := !res + times)
         qs;
       !res
+    let get_tail ?(fraction = 0.5) qs =
+      let card = get_cardinal qs in
+      let to_discard = int_of_float (floor (float_of_int card *. (1. -. fraction)))
+      and discarded = ref 0 and res = ref IntMap.empty in
+      IntMap.iter
+        (fun qual times ->
+          if !discarded < to_discard then begin
+            if !discarded + times >= to_discard then begin
+              let not_ok = min times (to_discard - !discarded) in
+              discarded := !discarded + not_ok;
+              if times > not_ok then
+                res := IntMap.singleton qual (times - not_ok)
+            end else
+              discarded := !discarded + times
+          end else
+            res := IntMap.add qual times !res)
+        qs;
+      !res
     let get_sum qs =
       let res = ref 0 in
       IntMap.iter
@@ -152,6 +170,14 @@ module QualitiesDistribution =
           res := !res + times * qual)
         qs;
       !res
+    let get_mean qs =
+      let acc = ref 0 and counts = ref 0 in
+      IntMap.iter
+        (fun qual times ->
+          counts := !counts + times;
+          acc := !acc + times * qual)
+        qs;
+      float_of_int !acc /. float_of_int !counts
     let get_variance qs =
       let card = get_cardinal qs in
       let mean = float_of_int (get_sum qs) /. float_of_int card in
@@ -385,7 +411,7 @@ module Genotype:
         +. 1. /. (12. *. f_n)
         -. 1. /. (360. *. f_n *. f_n *. f_n)
     (* In fact fst will contain the accumulated statistics *)
-    let lucas fst snd parameters =
+    let lucas ?(tail_fraction = 0.75) fst snd parameters =
       if snd.counts > 0 then begin
         let is_indel =
           match snd.symbol.[0] with
@@ -393,14 +419,16 @@ module Genotype:
           | _ -> false in
         let c_f_snd = float_of_int snd.counts in
         let c_f_fst = float_of_int fst.counts -. c_f_snd in
-        let var_fst = QualitiesDistribution.get_variance fst.quals
+        let mean_fst = QualitiesDistribution.get_mean (QualitiesDistribution.get_tail ~fraction:tail_fraction fst.quals)
+        and mean_snd = QualitiesDistribution.get_mean (QualitiesDistribution.get_tail ~fraction:tail_fraction snd.quals)
+        and var_fst = QualitiesDistribution.get_variance (QualitiesDistribution.get_tail ~fraction:tail_fraction fst.quals)
         and soq_fst = QualitiesDistribution.get_sum fst.quals
         and soq_snd = QualitiesDistribution.get_sum snd.quals in
         let q_fst = (float_of_int soq_fst) /. 10.
         and q_snd = (float_of_int soq_snd) /. 10.
         and pi = 4. *. atan 1. and log10 = log 10. in
 
-Printf.eprintf "'%s': q_snd=%g\tall=%d\tc_f_fst=%g\tc_f_snd=%g\tfirst=%g\tsecond=%g\tthird=%g\tfour=%g\n%!" snd.symbol q_snd fst.counts c_f_fst c_f_snd begin
+Printf.eprintf "'%s': mean_fst=%g\tvar_fst=%g\tmean_snd=%g\tq_snd=%g\tall=%d\tc_f_fst=%g\tc_f_snd=%g\tfirst=%g\tsecond=%g\tthird=%g\tfourth=%g\n%!" snd.symbol mean_fst var_fst mean_snd q_snd fst.counts c_f_fst c_f_snd begin
                 +. log_stirling (fst.counts + snd.counts)
                 -. log_stirling fst.counts -. log_stirling snd.counts
                 -. log10 *. float_of_int begin
@@ -424,11 +452,11 @@ end begin
 end begin
                 exp begin
                   -. begin
-                    let what = 10. *. (q_snd /. c_f_snd -. q_fst /. (c_f_fst +. c_f_snd)) in
+                    let what = mean_snd -. mean_fst in
                     what *. what
-                  end /. 2. /. var_fst *. c_f_snd
+                  end /. 2. /. var_fst *. c_f_snd *. tail_fraction
                 end
-                /. sqrt (2. *. pi *. var_fst *. c_f_snd)
+                /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
                 *. ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
                 *. begin
                   if is_indel then
@@ -468,11 +496,11 @@ end;
               /. begin
                 exp begin
                   -. begin
-                    let what = 10. *. q_snd /. c_f_snd -. q_fst /. (c_f_fst +. c_f_snd) in
+                    let what = mean_snd -. mean_fst in
                     what *. what
-                  end /. 2. /. var_fst *. c_f_snd
+                  end /. 2. /. var_fst *. c_f_snd *. tail_fraction
                 end
-                /. sqrt (2. *. pi *. var_fst *. c_f_snd)
+                /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
                 *. ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
                 *. begin
                   if is_indel then
