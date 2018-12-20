@@ -419,9 +419,9 @@ module Genotype:
           | _ -> false in
         let c_f_snd = float_of_int snd.counts in
         let c_f_fst = float_of_int fst.counts -. c_f_snd in
-        let mean_fst = QualitiesDistribution.get_mean (QualitiesDistribution.get_tail ~fraction:tail_fraction fst.quals)
+        let mean_fst = QualitiesDistribution.get_mean fst.quals
         and mean_snd = QualitiesDistribution.get_mean (QualitiesDistribution.get_tail ~fraction:tail_fraction snd.quals)
-        and var_fst = QualitiesDistribution.get_variance (QualitiesDistribution.get_tail ~fraction:tail_fraction fst.quals)
+        and var_fst = QualitiesDistribution.get_variance fst.quals
         and soq_fst = QualitiesDistribution.get_sum fst.quals
         and soq_snd = QualitiesDistribution.get_sum snd.quals in
         let q_fst = (float_of_int soq_fst) /. 10.
@@ -469,6 +469,7 @@ end;
         exp begin
           -. log1p begin
             begin
+              begin
               exp begin
                 +. log_stirling (fst.counts + snd.counts)
                 -. log_stirling fst.counts -. log_stirling snd.counts
@@ -486,22 +487,24 @@ end;
                   else
                     q_snd
                 end
-              end +. begin
-                if is_indel then
-                  0.
+              end
+              end /. begin
+              if is_indel then
+                  1.
                 else
+                exp begin
+                  -. begin
+                    let what = mean_snd -. mean_fst in
+                    if what < 0. then what *. what else 0.
+                  end /. 2. /. var_fst *. c_f_snd *. tail_fraction
+                end
+                /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
+                end +. begin
                   2. *. (parameters.pcr_error *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.))
               end
             end
               /. begin
-                exp begin
-                  -. begin
-                    let what = mean_snd -. mean_fst in
-                    what *. what
-                  end /. 2. /. var_fst *. c_f_snd *. tail_fraction
-                end
-                /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
-                *. ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
+                ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
                 *. begin
                   if is_indel then
                     parameters.theta_indel
