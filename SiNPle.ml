@@ -446,72 +446,67 @@ end begin
                 end
 end begin
                 if is_indel then
-                  0.
+                  1.
                 else
-                  2. *. (parameters.pcr_error *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.))
+                  exp begin
+                    -. begin
+                      let what = mean_snd -. mean_fst in
+                      if what < 0. then what *. what else 0.
+                    end /. 2. /. var_fst *. c_f_snd *. tail_fraction
+                  end /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
 end begin
-                exp begin
-                  -. begin
-                    let what = mean_snd -. mean_fst in
-                    what *. what
-                  end /. 2. /. var_fst *. c_f_snd *. tail_fraction
-                end
-                /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
-                *. ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
-                *. begin
-                  if is_indel then
-                    parameters.theta_indel
-                  else
-                    parameters.theta
-                end
+              ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
+              *. begin
+                if is_indel then
+                  parameters.theta_indel
+                else
+                  parameters.theta
+              end
 end;
 
         exp begin
           -. log1p begin
             begin
               begin
-              exp begin
-                +. log_stirling (fst.counts + snd.counts)
-                -. log_stirling fst.counts -. log_stirling snd.counts
-                -. log10 *. float_of_int begin
-                  if is_indel then
-                    parameters.q_indel_eff
-                  else
-                    parameters.q_eff
-                end *. c_f_snd /. 10.
-              end +.
-              exp begin
-                -. log10 *. begin
-                  if is_indel then
-                    float_of_int parameters.q_indel_eff *. c_f_snd /. 10.
-                  else
-                    q_snd
+                exp begin
+                  +. log_stirling (fst.counts + snd.counts)
+                  -. log_stirling fst.counts -. log_stirling snd.counts
+                  -. log10 *. float_of_int begin
+                    if is_indel then
+                      parameters.q_indel_eff
+                    else
+                      parameters.q_eff
+                  end *. c_f_snd /. 10.
+                end +.
+                exp begin
+                  -. log10 *. begin
+                    if is_indel then
+                      float_of_int parameters.q_indel_eff *. c_f_snd /. 10.
+                    else
+                      q_snd
+                  end
                 end
-              end
               end /. begin
-              if is_indel then
+                if is_indel then
                   1.
                 else
-                exp begin
-                  -. begin
-                    let what = mean_snd -. mean_fst in
-                    if what < 0. then what *. what else 0.
-                  end /. 2. /. var_fst *. c_f_snd *. tail_fraction
-                end
-                /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
-                end +. begin
-                  2. *. (parameters.pcr_error *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.))
+                  exp begin
+                    -. begin
+                      let what = mean_snd -. mean_fst in
+                      if what < 0. then what *. what else 0.
+                    end /. 2. /. var_fst *. c_f_snd *. tail_fraction
+                  end /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
+              end +. 2. *. (parameters.pcr_error *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.))
+            end
+            /. begin
+              ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
+              *. begin
+                if is_indel then
+                  parameters.theta_indel
+                else
+                  parameters.theta
               end
             end
-              /. begin
-                ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
-                *. begin
-                  if is_indel then
-                    parameters.theta_indel
-                  else
-                    parameters.theta
-                end
-              end
           end
         end
       end else
