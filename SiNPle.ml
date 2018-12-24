@@ -496,7 +496,13 @@ end;
                       if what < 0. then what *. what else 0.
                     end /. 2. /. var_fst *. c_f_snd *. tail_fraction
                   end /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
-              end +. 2. *. (parameters.pcr_error *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.))
+              end +. 2. *. begin
+              if is_indel then 
+                parameters.pcr_error_indel
+              else
+                parameters.pcr_error
+              end    
+              *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.)
             end
             /. begin
               ((c_f_fst +. c_f_snd) /. (c_f_fst *. c_f_snd))
@@ -629,6 +635,7 @@ module Defaults =
     let theta = 0.001
     let q_indel = 25
     let pcr_error = 0.5e-6
+    let pcr_error_indel = 0.5e-6
     let q_eff = 40
     let strandedness = Strandedness.Both
   end
@@ -641,6 +648,7 @@ module Params =
     let theta_indel = ref (Defaults.theta /. 10.)
     let q_indel = ref Defaults.q_indel
     let pcr_error = ref Defaults.pcr_error
+    let pcr_error_indel = ref Defaults.pcr_error_indel
     let q_eff = ref Defaults.q_eff
     let q_indel_eff = ref Defaults.q_indel
     let strandedness = ref Defaults.strandedness
