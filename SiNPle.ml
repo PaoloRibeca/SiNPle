@@ -362,12 +362,15 @@ module Genotype:
       theta_indel: float;
       (* A default quality/confidence level for indels
           (we cannot easily read it from the pileup) *)
-      q_indel: int; (* Result of a computation *)
+      q_indel_short: int;
+      q_indel_long: int;
       (* We do not believe variants below this [frequency] *)
-      pcr_error: float;
-      (* The following ones are computed from the whole experiment -- q_eff would in fact be a substitution matrix *)
-      q_eff: int;
-      q_indel_eff: int
+      pcr_error_rate_substitution: float;
+      pcr_error_rate_indel: float;
+      (* Recalibrated parameters -- they are computed from the whole experiment -- q_eff would in fact be a substitution matrix *)
+      error_rate_substitution: float;
+      error_rate_indel_short: float;
+      error_rate_indel_long: float
     }
     val from_pileup: Pileup.t -> Strandedness.t -> parameters_t -> t
     val to_sinple: t -> string
@@ -389,10 +392,13 @@ module Genotype:
     type parameters_t = {
       theta: float;
       theta_indel: float;
-      q_indel: int;
-      pcr_error: float;
-      q_eff: int;
-      q_indel_eff: int
+      q_indel_short: int;
+      q_indel_long: int;
+      pcr_error_rate_substitution: float;
+      pcr_error_rate_indel: float;
+      error_rate_substitution: float;
+      error_rate_indel_short: float;
+      error_rate_indel_long: float
     }
     (* Accessory functions *)
     let zero_if_div_by_zero a b =
@@ -412,38 +418,48 @@ module Genotype:
         -. 1. /. (360. *. f_n *. f_n *. f_n)
     (* In fact fst will contain the accumulated statistics *)
     let lucas ?(tail_fraction = 0.75) fst snd parameters =
-      if snd.counts > 0 then begin
+      match fst.counts with
+      | 0 -> 0.
+      | 1 -> 1.
+      | _ ->
         let is_indel =
           match snd.symbol.[0] with
           | '+' | '-' -> true
           | _ -> false in
+        let is_long_indel = is_indel && String.length snd.symbol > 2 in
         let c_f_snd = float_of_int snd.counts in
         let c_f_fst = float_of_int fst.counts -. c_f_snd in
         let mean_fst = QualitiesDistribution.get_mean fst.quals
         and mean_snd = QualitiesDistribution.get_mean (QualitiesDistribution.get_tail ~fraction:tail_fraction snd.quals)
         and var_fst = QualitiesDistribution.get_variance fst.quals
-        and soq_fst = QualitiesDistribution.get_sum fst.quals
         and soq_snd = QualitiesDistribution.get_sum snd.quals in
-        let q_fst = (float_of_int soq_fst) /. 10.
-        and q_snd = (float_of_int soq_snd) /. 10.
+        let q_snd = (float_of_int soq_snd) /. 10.
         and pi = 4. *. atan 1. and log10 = log 10. in
-
+(*
 Printf.eprintf "'%s': mean_fst=%g\tvar_fst=%g\tmean_snd=%g\tq_snd=%g\tall=%d\tc_f_fst=%g\tc_f_snd=%g\tfirst=%g\tsecond=%g\tthird=%g\tfourth=%g\n%!" snd.symbol mean_fst var_fst mean_snd q_snd fst.counts c_f_fst c_f_snd begin
-                +. log_stirling (fst.counts + snd.counts)
-                -. log_stirling fst.counts -. log_stirling snd.counts
-                -. log10 *. float_of_int begin
-                  if is_indel then
-                    parameters.q_indel_eff
-                  else
-                    parameters.q_eff
-                end *. c_f_snd /. 10.
+                  +. log_stirling (fst.counts + snd.counts)
+                  -. log_stirling fst.counts -. log_stirling snd.counts
+                  -. log begin
+                    if is_indel then
+                      if is_long_indel then
+                        parameters.error_rate_indel_long
+                      else
+                        parameters.error_rate_indel_short
+                    else
+                      parameters.error_rate_substitution
+                  end *. c_f_snd
 end begin
-                -. log10 *. begin
-                  if is_indel then
-                    float_of_int parameters.q_indel_eff *. c_f_snd /. 10.
-                  else
-                    q_snd
-                end
+                  -. log10 *. begin
+                    if is_indel then
+                      float_of_int begin
+                        if is_long_indel then
+                          parameters.q_indel_long
+                        else
+                          parameters.q_indel_short
+                      end *. c_f_snd /. 10.
+                    else
+                      q_snd
+                  end
 end begin
                 if is_indel then
                   1.
@@ -463,7 +479,7 @@ end begin
                   parameters.theta
               end
 end;
-
+*)
         exp begin
           -. log1p begin
             begin
@@ -471,17 +487,25 @@ end;
                 exp begin
                   +. log_stirling (fst.counts + snd.counts)
                   -. log_stirling fst.counts -. log_stirling snd.counts
-                  -. log10 *. float_of_int begin
+                  +. log begin
                     if is_indel then
-                      parameters.q_indel_eff
+                      if is_long_indel then
+                        parameters.error_rate_indel_long
+                      else
+                        parameters.error_rate_indel_short
                     else
-                      parameters.q_eff
-                  end *. c_f_snd /. 10.
+                      parameters.error_rate_substitution
+                  end *. c_f_snd
                 end +.
                 exp begin
                   -. log10 *. begin
                     if is_indel then
-                      float_of_int parameters.q_indel_eff *. c_f_snd /. 10.
+                      float_of_int begin
+                        if is_long_indel then
+                          parameters.q_indel_long
+                        else
+                          parameters.q_indel_short
+                      end *. c_f_snd /. 10.
                     else
                       q_snd
                   end
@@ -497,10 +521,10 @@ end;
                     end /. 2. /. var_fst *. c_f_snd *. tail_fraction
                   end /. sqrt (2. *. pi *. var_fst *. c_f_snd *. tail_fraction)
               end +. 2. *. begin
-              if is_indel then 
-                parameters.pcr_error_indel
+              if is_indel then
+                parameters.pcr_error_rate_indel
               else
-                parameters.pcr_error
+                parameters.pcr_error_rate_substitution
               end    
               *. (c_f_fst +. c_f_snd) /. (c_f_snd ** 2.)
             end
@@ -515,8 +539,6 @@ end;
             end
           end
         end
-      end else
-        0.
     let from_pileup pileup strandedness parameters =
       let res = ref [] in
       (* We kill all unwanted pileup features according to cases *)
@@ -623,9 +645,9 @@ end;
     theta=10^-3
     theta_indel=theta/10
     q_indel=25
-    pcr_error=0.5*10^-6 (min frequency=2*pcr_error/theta~10^-3)
+    pcr_error_rate=0.5*10^-6 (min frequency=2*pcr_error_rate/theta~10^-3)
     q_eff=40
-    q_indel_eff=q_indel
+    q_eff_indel=q_indel
 *)
 
 module Defaults =
@@ -633,10 +655,12 @@ module Defaults =
     let input_file = ""
     let output_file = ""
     let theta = 0.001
-    let q_indel = 25
-    let pcr_error = 0.5e-6
-    let pcr_error_indel = 0.5e-6
-    let q_eff = 40
+    let q_indel_short = 35
+    let q_indel_long = 45
+    let pcr_error_rate_substitution = 0.5e-6
+    let error_rate_substitution = 1.e-4
+    let error_rate_indel_short = 1.e-5
+    let error_rate_indel_long = 1.e-6
     let strandedness = Strandedness.Both
   end
 
@@ -646,11 +670,13 @@ module Params =
     let output_file = ref Defaults.output_file
     let theta = ref Defaults.theta
     let theta_indel = ref (Defaults.theta /. 10.)
-    let q_indel = ref Defaults.q_indel
-    let pcr_error = ref Defaults.pcr_error
-    let pcr_error_indel = ref Defaults.pcr_error_indel
-    let q_eff = ref Defaults.q_eff
-    let q_indel_eff = ref Defaults.q_indel
+    let q_indel_short = ref Defaults.q_indel_short
+    let q_indel_long = ref Defaults.q_indel_long
+    let pcr_error_rate_substitution = ref Defaults.pcr_error_rate_substitution
+    let pcr_error_rate_indel = ref (Defaults.pcr_error_rate_substitution /. 10.)
+    let error_rate_substitution = ref Defaults.error_rate_substitution
+    let error_rate_indel_short = ref Defaults.error_rate_indel_short
+    let error_rate_indel_long = ref Defaults.error_rate_indel_long
     let strandedness = ref Defaults.strandedness
   end
 
@@ -658,9 +684,9 @@ let version = "0.3"
 
 let _ =
   Printf.eprintf "This is the SiNPle SNP calling program (version %s)\n%!" version;
-  Printf.eprintf " (c) 2017-2018 Luca Ferretti, <luca.ferretti@gmail.com>\n%!";
-  Printf.eprintf " (c) 2017-2018 Chandana Tennakoon, <drcyber@gmail.com>\n%!";
-  Printf.eprintf " (c) 2017-2018 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
+  Printf.eprintf " (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>\n%!";
+  Printf.eprintf " (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>\n%!";
+  Printf.eprintf " (c) 2017-2019 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
   Argv.parse [
     [], None, [ "=== Algorithmic parameters ===" ], Argv.Optional, (fun _ -> ());
     [ "-t"; "--theta" ],
@@ -673,26 +699,41 @@ let _ =
       [ "prior estimate of indel likelihood" ],
       Argv.Default (fun () -> string_of_float !Params.theta_indel),
       (fun _ -> Params.theta_indel := Argv.get_non_neg_float_parameter ());
-    [ "-I"; "--indel-quality" ],
+    [ "-I"; "--quality-indel-short" ],
       Some "<non_negative_integer>",
-      [ "...whatever that is..." ],
-      Argv.Default (fun () -> string_of_int !Params.q_indel),
-      (fun _ -> Params.q_indel := Argv.get_non_neg_int_parameter ());
-    [ "-p"; "--pcr-error" ],
+      [ "prior Phred-scaled quality for indels of length 1" ],
+      Argv.Default (fun () -> string_of_int !Params.q_indel_short),
+      (fun _ -> Params.q_indel_short := Argv.get_non_neg_int_parameter ());
+    [ "-L"; "--quality-indel-long" ],
+      Some "<non_negative_integer>",
+      [ "prior Phred-scaled quality for indels of length >1" ],
+      Argv.Default (fun () -> string_of_int !Params.q_indel_long),
+      (fun _ -> Params.q_indel_long := Argv.get_non_neg_int_parameter ());
+    [ "-p"; "--pcr-error-rate" ],
       Some "<non_negative_float>",
-      [ "prior estimate of PCR error level" ],
-      Argv.Default (fun () -> string_of_float !Params.pcr_error),
-      (fun _ -> Params.pcr_error := Argv.get_non_neg_float_parameter ());
-    [ "--effective-quality" ],
-      Some "<non_negative_integer>",
-      [ "...whatever that is..." ],
-      Argv.Default (fun () -> string_of_int !Params.q_eff),
-      (fun _ -> Params.q_eff := Argv.get_non_neg_int_parameter ());
-    [ "--effective-indel-quality" ],
-      Some "<non_negative_integer>",
-      [ "...whatever that is..." ],
-      Argv.Default (fun () -> string_of_int !Params.q_indel_eff),
-      (fun _ -> Params.q_indel_eff := Argv.get_non_neg_int_parameter ());
+      [ "prior estimate of error rate for PCR-generated substitutions" ],
+      Argv.Default (fun () -> string_of_float !Params.pcr_error_rate_substitution),
+      (fun _ -> Params.pcr_error_rate_substitution := Argv.get_non_neg_float_parameter ());
+    [ "-P"; "--pcr-error-rate-indel" ],
+      Some "<non_negative_float>",
+      [ "prior estimate of error rate for PCR-generated indels" ],
+      Argv.Default (fun () -> string_of_float !Params.pcr_error_rate_indel),
+      (fun _ -> Params.pcr_error_rate_indel := Argv.get_non_neg_float_parameter ());
+    [ "--error-rate-substitution" ],
+      Some "<non_negative_float>",
+      [ "prior estimate of error rate for sequencing-generated substitutions" ],
+      Argv.Default (fun () -> string_of_float !Params.error_rate_substitution),
+      (fun _ -> Params.error_rate_substitution := Argv.get_non_neg_float_parameter ());
+    [ "--error-rate-indel-short" ],
+      Some "<non_negative_float>",
+      [ "prior estimate of error rate for sequencing-generated indels of length 1" ],
+      Argv.Default (fun () -> string_of_float !Params.error_rate_indel_short),
+      (fun _ -> Params.error_rate_indel_short := Argv.get_non_neg_float_parameter ());
+    [ "--error-rate-indel-long" ],
+      Some "<non_negative_float>",
+      [ "prior estimate of error rate for sequencing-generated indels of length >1" ],
+      Argv.Default (fun () -> string_of_float !Params.error_rate_indel_long),
+      (fun _ -> Params.error_rate_indel_long := Argv.get_non_neg_float_parameter ());
     [ "-s"; "-S"; "--strandedness" ],
       Some "forward|reverse|both",
       [ "strands to be taken into account for counts" ],
@@ -729,10 +770,13 @@ let _ =
   let parameters = {
     Genotype.theta = !Params.theta;
     theta_indel = !Params.theta_indel;
-    q_indel = !Params.q_indel;
-    pcr_error = !Params.pcr_error;
-    q_eff = !Params.q_eff;
-    q_indel_eff = !Params.q_indel_eff
+    q_indel_short = !Params.q_indel_short;
+    q_indel_long = !Params.q_indel_long;
+    pcr_error_rate_substitution = !Params.pcr_error_rate_substitution;
+    pcr_error_rate_indel = !Params.pcr_error_rate_indel;
+    error_rate_substitution = !Params.error_rate_substitution;
+    error_rate_indel_short = !Params.error_rate_indel_short;
+    error_rate_indel_long = !Params.error_rate_indel_long
   } in
   try
     while true do
