@@ -407,125 +407,125 @@ module Genotype:
       else
         0.
     (* Approximation of the log of the factorial *)
-    let log_stirling n =
-      let pi = 4. *. atan 1.
-      and f_n = float_of_int n in
-      let log_2_pi = log (2. *. pi)
-      and log_n = log f_n in
-      f_n *. (log_n -. 1.)
-        +. (log_2_pi +. log_n) /. 2.
-        +. 1. /. (12. *. f_n)
-        -. 1. /. (360. *. f_n *. f_n *. f_n)
+    let log_stirling = function
+      | 0 | 1 -> 0.
+      | n ->
+        let pi = 4. *. atan 1.
+        and f_n = float_of_int n in
+        let log_2_pi = log (2. *. pi)
+        and log_n = log f_n in
+        f_n *. (log_n -. 1.)
+          +. (log_2_pi +. log_n) /. 2.
+          +. 1. /. (12. *. f_n)
+          -. 1. /. (360. *. f_n *. f_n *. f_n)
     (* Mapping from theta to actual probabilities *)
     let smooth_inverse_theta f_counts theta =
-      let log_counts = log f_counts in
-      let theta = min theta (1. /. log_counts) in
-      (1. -. (theta *. log_counts)) /. theta
-    let lucas ?(tail_fraction = 0.75) acc_acgtn_counts acc_indel_counts acc_quals gb parameters =
-      let acc_total_counts = acc_acgtn_counts + acc_indel_counts in
-      match acc_total_counts with
+      (* Luca says that 0.5 approximates Euler-Mascheroni constant well *)
+      let log_counts = log f_counts +. 0.577216 in
+      (1. -. theta) *. log_counts /. theta
+    let lucas ?(tail_fraction = 0.75) acc_acgtn_counts acc_quals gb parameters =
+      match acc_acgtn_counts with
       | 0 -> 0.
       | 1 -> 1.
       | _ ->
-        let is_indel =
-          match gb.symbol.[0] with
-          | '+' | '-' -> true
-          | _ -> false in
-        let is_long_indel = is_indel && String.length gb.symbol > 2 in
-        let f_gb_counts = float_of_int gb.counts
-        and log10 = log 10. in
-        if is_indel then begin
-          (* Case of an indel.
-             In this case the counts are the total number of reads (ACGTN+indel) *)
-          let f_acc_total_counts = float_of_int acc_total_counts in
-          let f_rem_counts = f_acc_total_counts -. f_gb_counts in
-          exp begin
-            -. log1p begin
-              begin
+        if gb.counts = acc_acgtn_counts then
+          (* Case of only one genotype, computation pointless *)
+          1.
+        else begin
+          let is_indel =
+            match gb.symbol.[0] with
+            | '+' | '-' -> true
+            | _ -> false in
+          let is_long_indel = is_indel && String.length gb.symbol > 2 in
+          let rem_counts = acc_acgtn_counts - gb.counts in
+          let f_acc_acgtn_counts = float_of_int acc_acgtn_counts
+          and f_gb_counts = float_of_int gb.counts
+          and f_rem_counts = float_of_int rem_counts
+          and log10 = log 10. in
+          if is_indel then
+            (* Case of an indel *)
+            exp begin
+              -. log1p begin
                 begin
-                  exp begin
-                    +. log_stirling (acc_total_counts + gb.counts)
-                    -. log_stirling acc_total_counts -. log_stirling gb.counts
-                    +. log begin
-                      if is_long_indel then
-                        parameters.error_rate_indel_long
-                      else
-                        parameters.error_rate_indel_short
-                    end *. f_gb_counts
-                    -. begin
-                      if is_long_indel then
-                        parameters.error_rate_indel_long
-                      else
-                        parameters.error_rate_indel_short
-                    end *. f_rem_counts
-                  end
-                  +. exp begin
-                    -. log10 *. begin
-                      float_of_int begin
-                        if is_long_indel then
-                          parameters.q_indel_long
-                        else
-                          parameters.q_indel_short
-                      end *. f_gb_counts /. 10.
+                  begin
+                    exp begin
+                      +. log_stirling acc_acgtn_counts
+                      -. log_stirling rem_counts -. log_stirling gb.counts
+                      +. begin
+                        let error_rate_indel =
+                          if is_long_indel then
+                            parameters.error_rate_indel_long
+                          else
+                            parameters.error_rate_indel_short in
+                        log error_rate_indel *. f_gb_counts
+                        -. error_rate_indel *. f_rem_counts
+                      end
+                    end
+                    +. exp begin
+                      -. log10 *. begin
+                        float_of_int begin
+                          if is_long_indel then
+                            parameters.q_indel_long
+                          else
+                            parameters.q_indel_short
+                        end *. f_gb_counts /. 10.
+                      end
                     end
                   end
+                  +. begin
+                    2. *. parameters.pcr_error_rate_indel
+                    *. f_acc_acgtn_counts /. (f_gb_counts ** 2.)
+                  end
                 end
-                +. begin
-                  2. *. parameters.pcr_error_rate_indel
-                  *. f_acc_total_counts /. (f_gb_counts ** 2.)
+                *. begin
+                  ((f_rem_counts *. f_gb_counts) /. f_acc_acgtn_counts)
+                  *. smooth_inverse_theta f_acc_acgtn_counts parameters.theta_indel
                 end
-              end
-              *. begin
-                ((f_rem_counts *. f_gb_counts) /. f_acc_total_counts)
-                *. smooth_inverse_theta f_gb_counts parameters.theta_indel
               end
             end
-          end
-        end else begin
-          (* Case of a SNP.
-             In this case the counts are the number of ACGTN (non-indel) reads *)
-          let f_acc_acgtn_counts = float_of_int acc_acgtn_counts in
-          let f_rem_counts = f_acc_acgtn_counts -. f_gb_counts
-          and mean_acc = QualitiesDistribution.get_mean acc_quals
-          and mean_gb = QualitiesDistribution.get_mean (QualitiesDistribution.get_tail ~fraction:tail_fraction gb.quals)
-          and var_acc = QualitiesDistribution.get_variance acc_quals in
-          (* Variance cannot be zero *)
-          let var_acc = max 1. var_acc in
-          let soq_gb = QualitiesDistribution.get_sum gb.quals in
-          let q_gb = (float_of_int soq_gb) /. 10.
-          and pi = 4. *. atan 1. in
-          exp begin
-            -. log1p begin
-              begin
+          else begin
+            (* Case of a SNP *)
+            let mean_acc = QualitiesDistribution.get_mean acc_quals
+            and mean_gb = QualitiesDistribution.get_mean (QualitiesDistribution.get_tail ~fraction:tail_fraction gb.quals)
+            and var_acc = QualitiesDistribution.get_variance acc_quals in
+            (* Variance cannot be zero *)
+            let var_acc = max 1. var_acc in
+            let soq_gb = QualitiesDistribution.get_sum gb.quals in
+            let q_gb = (float_of_int soq_gb) /. 10.
+            and pi = 4. *. atan 1. in
+            exp begin
+              -. log1p begin
                 begin
-                  exp begin
-                    +. log_stirling (acc_acgtn_counts + gb.counts)
-                    -. log_stirling acc_acgtn_counts -. log_stirling gb.counts
-                    +. log parameters.error_rate_substitution *. f_gb_counts
-                    -. parameters.error_rate_substitution *. f_rem_counts
+                  begin
+                    exp begin
+                      +. log_stirling acc_acgtn_counts
+                      -. log_stirling rem_counts -. log_stirling gb.counts
+                      +. log parameters.error_rate_substitution *. f_gb_counts
+                      -. parameters.error_rate_substitution *. f_rem_counts
+                    end
+                    +. exp begin
+                      -. log10 *. q_gb
+                    end
+                  end /. begin
+                    exp begin
+                      -. begin
+                        let what = mean_gb -. mean_acc in
+                        if what < 0. then
+                          what *. what
+                        else
+                          0.
+                      end /. 2. /. var_acc *. f_gb_counts *. tail_fraction
+                    end /. sqrt (2. *. pi *. var_acc *. f_gb_counts *. tail_fraction)
                   end
-                  +. exp begin
-                    -. log10 *. q_gb
+                  +. begin
+                    2. *. parameters.pcr_error_rate_substitution
+                    *. f_acc_acgtn_counts /. (f_gb_counts ** 2.)
                   end
-                end /. begin
-                  exp begin
-                    -. begin
-                      let what = mean_gb -. mean_acc in
-                      if what < 0. then
-                        what *. what
-                      else
-                        0.
-                    end /. 2. /. var_acc *. f_gb_counts *. tail_fraction
-                  end /. sqrt (2. *. pi *. var_acc *. f_gb_counts *. tail_fraction)
                 end
-                +. begin
-                  2. *. parameters.pcr_error_rate_substitution
-                  *. f_acc_acgtn_counts /. (f_gb_counts ** 2.)
+                *. begin
+                  ((f_rem_counts *. f_gb_counts) /. f_acc_acgtn_counts)
+                  *. smooth_inverse_theta f_acc_acgtn_counts parameters.theta
                 end
-              end
-              *. begin
-                ((f_rem_counts *. f_gb_counts) /. f_acc_acgtn_counts)
-                *. smooth_inverse_theta f_gb_counts parameters.theta
               end
             end
           end
@@ -567,25 +567,25 @@ module Genotype:
           !new_info
       end;
       (* In order to be able to compute the p-value we need the cumulative statistics *)
-      let acc_acgtn_counts = ref 0 and acc_indel_counts = ref 0 and acc_quals = ref QualitiesDistribution.empty in
+      let acc_acgtn_counts = ref 0 and acc_quals = ref QualitiesDistribution.empty in
       List.iter
         (fun { symbol; counts; quals } ->
           begin match symbol.[0] with
           | 'A' | 'C' | 'G' | 'T' | 'N' ->
             acc_acgtn_counts := !acc_acgtn_counts + counts
           | '+' | '-' ->
-            acc_indel_counts := !acc_indel_counts + counts
+            ()
           | _ ->
             assert false
           end;
           acc_quals := QualitiesDistribution.merge !acc_quals quals)
         !res;
-      let acc_acgtn_counts = !acc_acgtn_counts and acc_indel_counts = !acc_indel_counts and acc_quals = !acc_quals in
+      let acc_acgtn_counts = !acc_acgtn_counts and acc_quals = !acc_quals in
       let res =
         Array.of_list begin
           List.map
             (fun genobase ->
-              { genobase with p_value = lucas acc_acgtn_counts acc_indel_counts acc_quals genobase parameters })
+              { genobase with p_value = lucas acc_acgtn_counts acc_quals genobase parameters })
             !res
         end in
       (* We want most frequent bases first, and then genotypes sorted by p-value *)
@@ -679,7 +679,7 @@ module Params =
     let strandedness = ref Defaults.strandedness
   end
 
-let version = "0.4"
+let version = "0.5"
 
 let _ =
   Printf.eprintf "This is the SiNPle SNP calling program (version %s)\n%!" version;
@@ -782,9 +782,6 @@ let _ =
       let pileup = Pileup.from_mpileup_line (input_line input) in
       let genotype = Genotype.from_pileup pileup !Params.strandedness parameters in
       Printf.fprintf output "%s\n%!" (Genotype.to_sinple genotype)
-
-
-
     done
   with End_of_file -> ()
 
