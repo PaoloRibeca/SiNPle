@@ -1,4 +1,17 @@
-(* *)
+(* 
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*)
 
 module Argv:
   sig
@@ -234,7 +247,6 @@ module Pileup:
       refr: string;
       info: (int * qualities_distribution_t) StringMap.t
     }
-    let empty = StringMap.empty
     let add_to stats what qual =
       try
         let num, quals = StringMap.find what stats in
@@ -254,24 +266,23 @@ module Pileup:
     let from_mpileup_line ?(quality_offset = 33) line =
       let line = Array.of_list (String.split_on_char '\t' line) in
       let len = Array.length line in
-      if len < 6 then begin
-        Printf.eprintf "Insufficient number of fields in input\n%!";
-        exit 1
-      end;
+      if len < 6 then
+        parse_error "Insufficient number of fields in input";
       let refr, pileup, quals = line.(2), line.(4), line.(5) in
       if String.length refr > 1 then
-        parse_error ("Invalid reference '" ^ refr ^ "'");
-	    let refr_uc = String.uppercase_ascii refr and refr_lc = String.lowercase_ascii refr
-      and len = String.length pileup and res = ref empty in
-      if len > 0 then begin
+        "Invalid reference '" ^ refr ^ "'" |> parse_error;
+      let refr_uc = String.uppercase_ascii refr and refr_lc = String.lowercase_ascii refr
+      and len = String.length pileup and res = ref StringMap.empty in
+      (* Here len might be > 0 even if the pileup is empty ("*") *)
+      if line.(3) <> "0" && len > 0 then begin
         let quality_from_ascii c = Char.code c - quality_offset
-	      and i = ref 0 and qpos = ref 0 in
+        and i = ref 0 and qpos = ref 0 in
         while !i < len do
-		      let c = String.sub pileup !i 1 in
+          let c = String.sub pileup !i 1 in
           begin match c with
           | "A" | "C" | "G" | "T" | "N" | "a" | "c" | "g" | "t" | "n" ->
             res := add_to !res c (quality_from_ascii quals.[!qpos]);
-		        incr qpos
+            incr qpos
           | "." ->
             res := add_to !res refr_uc (quality_from_ascii quals.[!qpos]);
             incr qpos
@@ -311,9 +322,10 @@ module Pileup:
         done;
         let qlen = String.length quals in
         if !qpos <> qlen then
-          parse_error (Printf.sprintf "Lengths of pileup and qualities are inconsistent (%d vs. %d)" !qpos qlen);
-        incr parsed_lines
+          Printf.sprintf "Lengths of pileup and qualities are inconsistent (%d vs. %d)" !qpos qlen
+            |> parse_error
       end;
+      incr parsed_lines;
       { seq = line.(0); pos = int_of_string line.(1); refr = refr; info = !res }
   end
 
@@ -679,13 +691,13 @@ module Params =
     let strandedness = ref Defaults.strandedness
   end
 
-let version = "0.5"
+let version = "0.7"
 
-let _ =
-  Printf.eprintf "This is the SiNPle SNP calling program (version %s)\n%!" version;
+let () =
+  Printf.eprintf "This is the SiNPle variant calling program (version %s)\n%!" version;
   Printf.eprintf " (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>\n%!";
   Printf.eprintf " (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>\n%!";
-  Printf.eprintf " (c) 2017-2019 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
+  Printf.eprintf " (c) 2017-2020 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
   Argv.parse [
     [], None, [ "=== Algorithmic parameters ===" ], Argv.Optional, (fun _ -> ());
     [ "-t"; "--theta" ],
@@ -750,11 +762,16 @@ let _ =
       Argv.Default (fun () -> if !Params.output_file = "" then "<stdout>" else !Params.output_file),
       (fun _ -> Params.output_file := Argv.get_parameter() );
     [], None, [ "=== Miscellaneous ===" ], Argv.Optional, (fun _ -> ());
+    [ "-v"; "--version" ],
+      None,
+      [ "print version and exit" ],
+      Argv.Optional,
+      (fun _ -> Printf.printf "%s\n%!" version; exit 0);
     [ "-h"; "--help" ],
       None,
       [ "print syntax and exit" ],
       Argv.Optional,
-      (fun _ -> Argv.usage (); exit 1)
+      (fun _ -> Argv.usage (); exit 0)
   ];
   let input =
     if !Params.input_file = "" then
@@ -784,4 +801,3 @@ let _ =
       Printf.fprintf output "%s\n%!" (Genotype.to_sinple genotype)
     done
   with End_of_file -> ()
-
