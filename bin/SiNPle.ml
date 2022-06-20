@@ -1,4 +1,4 @@
-(* 
+(*
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -426,7 +426,7 @@ module Genotype:
           (fun s (counts, quals) ->
             if String.uppercase_ascii s <> s then
               res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals; p_value= 0. } :: !res)
-          pileup.Pileup.info             
+          pileup.Pileup.info
       | Strandedness.Both ->
         (* Sum lowercase to uppercase, eliminate lowercase *)
         let new_info = ref StringMap.empty in
@@ -560,12 +560,17 @@ module Params =
 
 let version = "0.8"
 
+let header =
+  Printf.sprintf begin
+    "This is the SiNPle variant calling program (version %s)\n" ^^
+    " (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>\n" ^^
+    " (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>\n" ^^
+    " (c) 2017-2021 Paolo Ribeca, <paolo.ribeca@gmail.com>\n"
+  end version
+
 let () =
-  Printf.eprintf "This is the SiNPle variant calling program (version %s)\n%!" version;
-  Printf.eprintf " (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>\n%!";
-  Printf.eprintf " (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>\n%!";
-  Printf.eprintf " (c) 2017-2021 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
   let module TA = Tools.Argv in
+  TA.set_header header;
   TA.parse [
     TA.make_separator "Algorithmic parameters";
     [ "-t"; "--theta" ],
