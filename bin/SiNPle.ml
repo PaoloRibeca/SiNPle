@@ -13,141 +13,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 *)
 
-module Argv:
-  sig
-    type class_t =
-      | Mandatory (* Implies no default *)
-      | Optional (* Implies no default *)
-      | Default of (unit -> string) (* Implies optional - the function prints the default *)
-    (* The specs from which usage is produced are a tuple with the following elements:
-        (1) equivalent option names
-        (2) optional explanation for the argument(s)
-        (3) help text lines
-        (4) mandatory/optional * default/no-default class
-        (5) parsing action when option is encountered *)
-    type spec_t = string list * string option * string list * class_t * (string -> unit)
-    val usage: ?output:out_channel -> unit -> unit
-    val get_parameter: unit -> string
-    val get_int_parameter: unit -> int
-    val get_float_parameter: unit -> float
-    val get_pos_int_parameter: unit -> int
-    val get_pos_float_parameter: unit -> float
-    val get_non_neg_int_parameter: unit -> int
-    val get_non_neg_float_parameter: unit -> float
-    val parse: spec_t list -> unit
-  end
-= struct
-    type class_t =
-      | Mandatory
-      | Optional
-      | Default of (unit -> string)
-    type spec_t = string list * string option * string list * class_t * (string -> unit)
-    let argv = Sys.argv
-    let i = ref 1
-    let buf = ref ("Usage:\n " ^ argv.(0) ^ "\n")
-    let usage ?(output = stdout) () = Printf.fprintf output "%s" !buf
-    let error ?(output = stderr) f_n msg =
-      usage ~output:output ();
-      Printf.fprintf output "Argv.%s: %s\n%!" f_n msg;
-      exit 1
-    let template_get n what f =
-      (fun () ->
-        try
-          f ()
-        with _ ->
-          error n ("Option '" ^ argv.(!i - 1) ^ "' needs a " ^ what ^ " parameter"))
-    let template_filter f g =
-      (fun () ->
-        let res = f () in
-        if res |> g then
-          res
-        else
-          raise Not_found)
-    let get_parameter =
-      template_get "get_parameter" "" (fun () -> incr i; argv.(!i))
-    let get_int_parameter =
-      template_get "get_integer_parameter" "integer" (fun () -> get_parameter () |> int_of_string)
-    let get_float_parameter =
-      template_get "get_float_parameter" "float" (fun () -> get_parameter () |> float_of_string)
-    let get_pos_int_parameter =
-      template_get "get_pos_int_parameter" "positive integer"
-      (template_filter get_int_parameter (fun x -> x > 0))
-    let get_pos_float_parameter =
-      template_get "get_pos_float_parameter" "positive float"
-      (template_filter get_float_parameter (fun x -> x > 0.))
-    let get_non_neg_int_parameter =
-      template_get "get_non_neg_int_parameter" "non-negative integer"
-      (template_filter get_int_parameter (fun x -> x >= 0))
-    let get_non_neg_float_parameter =
-      template_get "get_non_neg_float_parameter" "non-negative float"
-      (template_filter get_float_parameter (fun x -> x >= 0.))
-    let parse specs =
-      let module StringMap = Map.Make (String) in
-      let module StringSet = Set.Make (String) in
-      let table = ref StringMap.empty and mandatory = ref StringSet.empty in
-      List.iteri
-        (fun i (opts, vl, help, clss, act) ->
-          buf := !buf ^ "  ";
-          if opts = [] && help = [] then
-            error "parse" ("Malformed initializer for option #" ^ string_of_int i);
-          List.iteri
-            (fun i opt ->
-              if i > 0 then
-                buf := !buf ^ "|";
-              buf := !buf ^ opt;
-              if StringMap.mem opt !table then
-                error "parse" ("Duplicate command line option '" ^ opt ^ "' in table");
-              if clss = Mandatory then begin
-                let repr = List.hd opts in
-                mandatory := StringSet.add repr !mandatory;
-                table :=
-                  StringMap.add opt
-                    (fun arg ->
-                      mandatory := StringSet.remove repr !mandatory;
-                      act arg)
-                    !table
-              end else
-                table := StringMap.add opt act !table)
-            opts;
-          buf := !buf ^ begin
-            match vl with
-            | None -> ""
-            | Some vl ->  " " ^ vl
-          end ^ begin
-            if opts <> [] then
-              "\n"
-            else
-              ""
-          end;
-          List.iteri
-            (fun i help -> buf := !buf ^ "\t" ^ help ^ "\n")
-            help;
-          match clss with
-          | Mandatory ->
-            buf := !buf ^ "\t(mandatory)\n"
-          | Optional -> ()
-          | Default def ->
-            buf := !buf ^ "\t(default='" ^ def () ^ "')\n")
-        specs;
-      let len = Array.length argv in
-      while !i < len do
-        let arg = argv.(!i) in
-        begin try
-          StringMap.find arg !table
-        with Not_found ->
-          error "parse" ("Unknown option '" ^ argv.(!i) ^ "'")
-        end arg;
-        incr i
-      done;
-      if !mandatory <> StringSet.empty then
-        StringSet.iter
-          (fun opt ->
-            error "parse" ("Option '" ^ opt ^ "' is mandatory"))
-          !mandatory
-  end
+open BiOCamLib
 
-module IntMap: Map.S with type key = int
-  = Map.Make(struct type t = int let compare = compare end)
+module IntMap = Tools.IntMap
 module QualitiesDistribution =
   struct
     include IntMap
@@ -214,8 +82,7 @@ module QualitiesDistribution =
   end
 type qualities_distribution_t = int QualitiesDistribution.t
 
-module StringMap: Map.S with type key = String.t
-  = Map.Make(String)
+module StringMap = Tools.StringMap
 
 module Strand:
   sig
@@ -691,87 +558,90 @@ module Params =
     let strandedness = ref Defaults.strandedness
   end
 
-let version = "0.7"
+let version = "0.8"
 
 let () =
   Printf.eprintf "This is the SiNPle variant calling program (version %s)\n%!" version;
   Printf.eprintf " (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>\n%!";
   Printf.eprintf " (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>\n%!";
-  Printf.eprintf " (c) 2017-2020 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
-  Argv.parse [
-    [], None, [ "=== Algorithmic parameters ===" ], Argv.Optional, (fun _ -> ());
+  Printf.eprintf " (c) 2017-2021 Paolo Ribeca, <paolo.ribeca@gmail.com>\n%!";
+  let module TA = Tools.Argv in
+  TA.parse [
+    TA.make_separator "Algorithmic parameters";
     [ "-t"; "--theta" ],
       Some "<non_negative_float>",
       [ "prior estimate of nucleotide diversity" ],
-      Argv.Default (fun () -> string_of_float !Params.theta),
-      (fun _ -> Params.theta := Argv.get_non_neg_float_parameter ());
+      TA.Default (fun () -> string_of_float !Params.theta),
+      (fun _ -> Params.theta := TA.get_parameter_float_non_neg ());
     [ "-T"; "--theta-indel" ],
       Some "<non_negative_float>",
       [ "prior estimate of indel likelihood" ],
-      Argv.Default (fun () -> string_of_float !Params.theta_indel),
-      (fun _ -> Params.theta_indel := Argv.get_non_neg_float_parameter ());
+      TA.Default (fun () -> string_of_float !Params.theta_indel),
+      (fun _ -> Params.theta_indel := TA.get_parameter_float_non_neg ());
     [ "-I"; "--quality-indel-short" ],
       Some "<non_negative_integer>",
       [ "prior Phred-scaled quality for indels of length 1" ],
-      Argv.Default (fun () -> string_of_int !Params.q_indel_short),
-      (fun _ -> Params.q_indel_short := Argv.get_non_neg_int_parameter ());
+      TA.Default (fun () -> string_of_int !Params.q_indel_short),
+      (fun _ -> Params.q_indel_short := TA.get_parameter_int_non_neg ());
     [ "-L"; "--quality-indel-long" ],
       Some "<non_negative_integer>",
       [ "prior Phred-scaled quality for indels of length >1" ],
-      Argv.Default (fun () -> string_of_int !Params.q_indel_long),
-      (fun _ -> Params.q_indel_long := Argv.get_non_neg_int_parameter ());
+      TA.Default (fun () -> string_of_int !Params.q_indel_long),
+      (fun _ -> Params.q_indel_long := TA.get_parameter_int_non_neg ());
     [ "-p"; "--pcr-error-rate" ],
       Some "<non_negative_float>",
       [ "prior estimate of error rate for PCR-generated substitutions" ],
-      Argv.Default (fun () -> string_of_float !Params.pcr_error_rate_substitution),
-      (fun _ -> Params.pcr_error_rate_substitution := Argv.get_non_neg_float_parameter ());
+      TA.Default (fun () -> string_of_float !Params.pcr_error_rate_substitution),
+      (fun _ -> Params.pcr_error_rate_substitution := TA.get_parameter_float_non_neg ());
     [ "-P"; "--pcr-error-rate-indel" ],
       Some "<non_negative_float>",
       [ "prior estimate of error rate for PCR-generated indels" ],
-      Argv.Default (fun () -> string_of_float !Params.pcr_error_rate_indel),
-      (fun _ -> Params.pcr_error_rate_indel := Argv.get_non_neg_float_parameter ());
+      TA.Default (fun () -> string_of_float !Params.pcr_error_rate_indel),
+      (fun _ -> Params.pcr_error_rate_indel := TA.get_parameter_float_non_neg ());
     [ "--error-rate-substitution" ],
       Some "<non_negative_float>",
       [ "prior estimate of error rate for sequencing-generated substitutions" ],
-      Argv.Default (fun () -> string_of_float !Params.error_rate_substitution),
-      (fun _ -> Params.error_rate_substitution := Argv.get_non_neg_float_parameter ());
+      TA.Default (fun () -> string_of_float !Params.error_rate_substitution),
+      (fun _ -> Params.error_rate_substitution := TA.get_parameter_float_non_neg ());
     [ "--error-rate-indel-short" ],
       Some "<non_negative_float>",
       [ "prior estimate of error rate for sequencing-generated indels of length 1" ],
-      Argv.Default (fun () -> string_of_float !Params.error_rate_indel_short),
-      (fun _ -> Params.error_rate_indel_short := Argv.get_non_neg_float_parameter ());
+      TA.Default (fun () -> string_of_float !Params.error_rate_indel_short),
+      (fun _ -> Params.error_rate_indel_short := TA.get_parameter_float_non_neg ());
     [ "--error-rate-indel-long" ],
       Some "<non_negative_float>",
       [ "prior estimate of error rate for sequencing-generated indels of length >1" ],
-      Argv.Default (fun () -> string_of_float !Params.error_rate_indel_long),
-      (fun _ -> Params.error_rate_indel_long := Argv.get_non_neg_float_parameter ());
+      TA.Default (fun () -> string_of_float !Params.error_rate_indel_long),
+      (fun _ -> Params.error_rate_indel_long := TA.get_parameter_float_non_neg ());
     [ "-s"; "-S"; "--strandedness" ],
       Some "forward|reverse|both",
       [ "strands to be taken into account for counts" ],
-      Argv.Default (fun () -> Strandedness.to_string !Params.strandedness),
-      (fun _ -> Params.strandedness := Strandedness.of_string (Argv.get_parameter ()));
-    [], None, [ "=== Input/Output ===" ], Argv.Optional, (fun _ -> ());
+      TA.Default (fun () -> Strandedness.to_string !Params.strandedness),
+      (fun _ -> Params.strandedness := Strandedness.of_string (TA.get_parameter ()));
+    TA.make_separator "Input/Output";
     [ "-i"; "--input" ],
       Some "<input_file>",
       [ "name of input file (in mpileup format)" ],
-      Argv.Default (fun () -> if !Params.input_file = "" then "<stdin>" else !Params.input_file),
-      (fun _ -> Params.input_file := Argv.get_parameter() );
+      TA.Default (fun () -> if !Params.input_file = "" then "<stdin>" else !Params.input_file),
+      (fun _ -> Params.input_file := TA.get_parameter() );
     [ "-o"; "--output" ],
       Some "<output_file>",
       [ "name of output file" ],
-      Argv.Default (fun () -> if !Params.output_file = "" then "<stdout>" else !Params.output_file),
-      (fun _ -> Params.output_file := Argv.get_parameter() );
-    [], None, [ "=== Miscellaneous ===" ], Argv.Optional, (fun _ -> ());
+      TA.Default (fun () -> if !Params.output_file = "" then "<stdout>" else !Params.output_file),
+      (fun _ -> Params.output_file := TA.get_parameter() );
+    TA.make_separator "Miscellaneous";
     [ "-v"; "--version" ],
       None,
       [ "print version and exit" ],
-      Argv.Optional,
+      TA.Optional,
       (fun _ -> Printf.printf "%s\n%!" version; exit 0);
+    (* Hidden option to emit help in markdown format *)
+    [ "--markdown" ], None, [], TA.Optional, (fun _ -> TA.markdown (); exit 0);
     [ "-h"; "--help" ],
       None,
       [ "print syntax and exit" ],
-      Argv.Optional,
-      (fun _ -> Argv.usage (); exit 0)
+      TA.Optional,
+      (fun _ -> TA.usage (); exit 0)
   ];
   let input =
     if !Params.input_file = "" then
@@ -800,4 +670,6 @@ let () =
       let genotype = Genotype.from_pileup pileup !Params.strandedness parameters in
       Printf.fprintf output "%s\n%!" (Genotype.to_sinple genotype)
     done
-  with End_of_file -> ()
+  with End_of_file ->
+    ()
+
