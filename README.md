@@ -5,17 +5,42 @@ In the Bayesian model used by `SiNPle` we explicitly consider the limit in which
 
 ## Comparison with other callers
 
-Some genotype callers, such as GATK, assume a ploidy of two. Others have hidden hardwired thresholds &mdash; for instance, a minimum number of covering reads needed to make a call &mdash; and hence miss many existing low-frequency variants. A detailed comparison with the low-frequency variant callers LoFreq and VarScan2 performed on CirSeq data can be found in [Ferretti et al., 2019](https://www.mdpi.com/2073-4425/10/8/561/htm); it shows that the approach adopted by `SiNPle` is faster and produces better results.
+Some genotype callers, such as GATK, assume a ploidy of two. Others have hidden hardwired thresholds &mdash; for instance, a minimum number of covering reads needed to make a call &mdash; and hence miss many existing low-frequency variants. A detailed comparison with the low-frequency variant callers LoFreq and VarScan2 performed on CirSeq data can be found in [Ferretti et al., 2019](https://www.mdpi.com/2073-4425/10/8/561/htm); it shows that the approach adopted by `SiNPle` is faster and much more accurate.
 
 ## Citation
 
-If you use SiNPle, please cite
+If you use `SiNPle`, please cite
 
 ## Installation
 
-To compile SiNPle, please install ocaml (http://www.ocaml.org/docs/install.html) and dune and run the following command:
+> :warning: Note that the only operating system we support is Linux. :warning:
+>
+> OCaml is highly portable and you might be able to manually compile/install everything successfully on other platforms (for instance, Mac) but you will have to do it yourself. 
 
-  ./BUILD
+There are several possible ways of installing the software on your machine: through `conda`; by downloading pre-compiled binaries (Linux x86_64 only); or manually.
+
+### Conda channel
+
+> :construction: Coming soon! :construction:
+
+### Pre-compiled binaries 
+
+### Manual install
+
+Alternatively, you can install `SiNPle` manually by cloning and compiling its sources. You will need an up-to-date distribution of the OCaml compiler and the [Dune package manager](https://github.com/ocaml/dune) for that. Both can be installed through [OPAM](https://opam.ocaml.org/), the official OCaml distribution system. Once you have a working OPAM distribution you will also have a working OCaml compiler, and Dune can be installed with the command
+```
+$ opam install dune
+```
+if it is not already present. Make sure that you install OCaml version 4.12 or later.
+
+You will also need a copy of the sources for the [BiOCamLib library](https://github.com/PaoloRibeca/BiOCamLib). We'll assume that you have cloned the repository in the directory `../BiOCamLib` with respect to the `SiNPle` sources; you'll have to modify the file `BUILD` in the `SiNPle` directory if that is not the case.
+
+Then go to the directory into which you have downloaded the latest `SiNPle` sources, and type
+```
+$ ./BUILD
+```
+
+That should generate the executable `SiNPle`. Copy it to some favourite location in your PATH, for instance `~/.local/bin`.
 
 ## How to run it
 
@@ -23,6 +48,8 @@ This will compile the binary 'SiNPle' and 'SiNPle -h' would give information on 
 An example of generating SiNPle variant calls from the bamfile example.bam would be
 
   samtools mpileup -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle > variants.txt
+  
+## Interpreting the output
 
 ## Command line syntax
 
@@ -62,4 +89,3 @@ Miscellaneous
 |-|-|-|-|
 | `-v`<br>`--version` |  |  print version and exit |  |
 | `-h`<br>`--help` |  |  print syntax and exit |  |
-
