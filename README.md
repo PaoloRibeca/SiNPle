@@ -54,11 +54,12 @@ That should generate the executable `SiNPle`. Copy it to some favourite location
 
 ## 2. How to run it
 
-This will compile the binary 'SiNPle' and 'SiNPle -h' would give information on all the options.
+`SiNPle` reads as input the pileup format produced by commands such as `samtools mpileup`.
+
 An example of generating SiNPle variant calls from the bamfile example.bam would be
 
 ```
-samtools mpileup -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle > variants.txt
+$ samtools mpileup -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle > variants.txt
 ```
   
 ## 3. Interpreting the output
