@@ -571,6 +571,7 @@ let header =
 let () =
   let module TA = Tools.Argv in
   TA.set_header header;
+  TA.set_synopsis "[OPTIONS]";
   TA.parse [
     TA.make_separator "Algorithmic parameters";
     [ "-t"; "--theta" ],
