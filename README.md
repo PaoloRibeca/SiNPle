@@ -66,15 +66,20 @@ $ samtools mpileup -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle > variants.t
 
 ## 4. Command line syntax
 
+This is the full list of command line options available for the program `SiNPle`. You can visualise the list by typing
+```bash
+$ SiNPle -h
+```
+in your terminal. You will see a header containing information about the version:
 ```
 This is the SiNPle variant calling program (version 0.8)
  (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>
  (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>
  (c) 2017-2021 Paolo Ribeca, <paolo.ribeca@gmail.com>
 ```
-Usage:
+followed by detailed information. The general form(s) the command can be used is:
 ```
-./SiNPle
+SiNPle [OPTIONS]
 ```
 
 Algorithmic parameters
