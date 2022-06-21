@@ -84,18 +84,6 @@ type qualities_distribution_t = int QualitiesDistribution.t
 
 module StringMap = Tools.StringMap
 
-module Strand:
-  sig
-    type t =
-      | Forward
-      | Reverse
-  end
-= struct
-    type t =
-      | Forward
-      | Reverse
-  end
-
 module Pileup:
   sig
     type t = {
@@ -223,7 +211,7 @@ module Strandedness:
       | Both -> "both"
   end
 
-module Genotype:
+module [@warning "-32"] Genotype:
   sig
     type genobase_t = {
       symbol: string;
@@ -448,7 +436,7 @@ module Genotype:
       (* In order to be able to compute the p-value we need the cumulative statistics *)
       let acc_acgtn_counts = ref 0 and acc_quals = ref QualitiesDistribution.empty in
       List.iter
-        (fun { symbol; counts; quals } ->
+        (fun { symbol; counts; quals; _ } ->
           begin match symbol.[0] with
           | 'A' | 'C' | 'G' | 'T' | 'N' ->
             acc_acgtn_counts := !acc_acgtn_counts + counts
@@ -494,13 +482,13 @@ module Genotype:
           end)
         info;
       Buffer.contents res
-    let from_sinple file =
+    let [@warning "-27"] from_sinple file =
 
       { seq = "";
         pos = 0;
         info = [||] }
 
-    let recalibrate_p_values obj x = obj
+    let [@warning "-27"] recalibrate_p_values obj x = obj
 
   end
 
