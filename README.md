@@ -82,7 +82,8 @@ followed by detailed information. The general form(s) the command can be used is
 SiNPle [OPTIONS]
 ```
 
-Algorithmic parameters
+**Algorithmic parameters**
+
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
 | `-t`<br>`--theta` | _&lt;non\_negative\_float&gt;_ |  prior estimate of nucleotide diversity | <ins>default=<mark>_0\.001_</mark></ins> |
@@ -96,14 +97,17 @@ Algorithmic parameters
 | `--error-rate-indel-long` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for sequencing\-generated indels of length &gt;1 | <ins>default=<mark>_1e\-06_</mark></ins> |
 | `-s`<br>`-S`<br>`--strandedness` | _forward&#124;reverse&#124;both_ |  strands to be taken into account for counts | <ins>default=<mark>_both_</mark></ins> |
 
-Input/Output
+**Input/Output**
+
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
 | `-i`<br>`--input` | _&lt;input\_file&gt;_ |  name of input file \(in mpileup format\) | <ins>default=<mark>_&lt;stdin&gt;_</mark></ins> |
 | `-o`<br>`--output` | _&lt;output\_file&gt;_ |  name of output file | <ins>default=<mark>_&lt;stdout&gt;_</mark></ins> |
 
-Miscellaneous
+**Miscellaneous**
+
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
 | `-v`<br>`--version` |  |  print version and exit |  |
 | `-h`<br>`--help` |  |  print syntax and exit |  |
+
