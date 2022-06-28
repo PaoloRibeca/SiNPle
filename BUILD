@@ -16,6 +16,9 @@ fi
 dune build --profile="$PROFILE" bin/SiNPle.exe
 
 chmod 755 _build/default/bin/SiNPle.exe
+if [ "$PROFILE" = "release" ]; then
+  strip _build/default/bin/SiNPle.exe
+fi
 
 rm -f SiNPle
 ln -s _build/default/bin/SiNPle.exe SiNPle
