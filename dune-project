@@ -13,14 +13,14 @@
 
 (license LICENSE)
 
-(documentation https://url/to/documentation)
+(documentation https://github.com/PaoloRibeca/SiNPle#readme)
 
 (package
  (name SiNPle)
- (synopsis "A short synopsis")
- (description "A longer description")
+ (synopsis "A variant caller for high-coverage sequencing data")
+ (description "A variant caller for high-coverage sequencing data")
  (depends ocaml dune)
  (tags
-  (topics "to describe" your project)))
+  (topics variants "variant calling" low-frequency bioinformatics sequencing)))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
