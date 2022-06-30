@@ -13,6 +13,10 @@ if [ -z "$PROFILE" ]; then
   PROFILE="dev"
 fi
 
+if [ "$PROFILE" = "release" ]; then
+  rm -rf _build
+fi
+
 dune build --profile="$PROFILE" bin/SiNPle.exe
 
 chmod 755 _build/default/bin/SiNPle.exe
