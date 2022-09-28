@@ -94,10 +94,10 @@ $ SiNPle -h
 ```
 in your terminal. You will see a header containing information about the version:
 ```
-This is the SiNPle variant calling program (version 0.8)
+This is the SiNPle variant calling program (version 0.9)
  (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>
  (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>
- (c) 2017-2021 Paolo Ribeca, <paolo.ribeca@gmail.com>
+ (c) 2017-2022 Paolo Ribeca, <paolo.ribeca@gmail.com>
 ```
 followed by detailed information. The general form(s) the command can be used is:
 ```
@@ -114,7 +114,7 @@ SiNPle [OPTIONS]
 | `-L`<br>`--quality-indel-long` | _&lt;non\_negative\_integer&gt;_ |  prior Phred\-scaled quality for indels of length &gt;1 | <ins>default=<mark>_45_</mark></ins> |
 | `-p`<br>`--pcr-error-rate` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for PCR\-generated substitutions | <ins>default=<mark>_5e\-07_</mark></ins> |
 | `-P`<br>`--pcr-error-rate-indel` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for PCR\-generated indels | <ins>default=<mark>_5e\-08_</mark></ins> |
-| `--error-rate-substitution` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for sequencing\-generated substitutions | <ins>default=<mark>_0\.0001_</mark></ins> |
+| `--error-rate` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for sequencing\-generated substitutions | <ins>default=<mark>_0\.0001_</mark></ins> |
 | `--error-rate-indel-short` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for sequencing\-generated indels of length 1 | <ins>default=<mark>_1e\-05_</mark></ins> |
 | `--error-rate-indel-long` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for sequencing\-generated indels of length &gt;1 | <ins>default=<mark>_1e\-06_</mark></ins> |
 | `-s`<br>`-S`<br>`--strandedness` | _forward&#124;reverse&#124;both_ |  strands to be taken into account for counts | <ins>default=<mark>_both_</mark></ins> |
