@@ -546,14 +546,14 @@ module Params =
     let strandedness = ref Defaults.strandedness
   end
 
-let version = "0.8"
+let version = "0.9"
 
 let header =
   Printf.sprintf begin
     "This is the SiNPle variant calling program (version %s)\n" ^^
     " (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>\n" ^^
     " (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>\n" ^^
-    " (c) 2017-2021 Paolo Ribeca, <paolo.ribeca@gmail.com>\n"
+    " (c) 2017-2022 Paolo Ribeca, <paolo.ribeca@gmail.com>\n"
   end version
 
 let () =
@@ -592,7 +592,7 @@ let () =
       [ "prior estimate of error rate for PCR-generated indels" ],
       TA.Default (fun () -> string_of_float !Params.pcr_error_rate_indel),
       (fun _ -> Params.pcr_error_rate_indel := TA.get_parameter_float_non_neg ());
-    [ "--error-rate-substitution" ],
+    [ "--error-rate" ],
       Some "<non_negative_float>",
       [ "prior estimate of error rate for sequencing-generated substitutions" ],
       TA.Default (fun () -> string_of_float !Params.error_rate_substitution),
