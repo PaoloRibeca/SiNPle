@@ -546,19 +546,19 @@ module Params =
     let strandedness = ref Defaults.strandedness
   end
 
-let version = "0.9"
-
-let header =
-  Printf.sprintf begin
-    "This is the SiNPle variant calling program (version %s)\n" ^^
-    " (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>\n" ^^
-    " (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>\n" ^^
-    " (c) 2017-2022 Paolo Ribeca, <paolo.ribeca@gmail.com>\n"
-  end version
+let info = {
+  Tools.Argv.name = "SiNPle";
+  version = "10";
+  date = "25-Mar-2024"
+} and authors = [
+  "2017-2019", "Luca Ferretti", "luca.ferretti@gmail.com";
+  "2017-2019", "Chandana Tennakoon", "drcyber@gmail.com";
+  "2017-2024", "Paolo Ribeca", "paolo.ribeca@gmail.com"
+]
 
 let () =
   let module TA = Tools.Argv in
-  TA.set_header header;
+  TA.set_header (info, authors, [ BiOCamLib.Info.info ]);
   TA.set_synopsis "[OPTIONS]";
   TA.parse [
     TA.make_separator "Algorithmic parameters";
@@ -624,11 +624,11 @@ let () =
       TA.Default (fun () -> if !Params.output_file = "" then "<stdout>" else !Params.output_file),
       (fun _ -> Params.output_file := TA.get_parameter() );
     TA.make_separator "Miscellaneous";
-    [ "-v"; "--version" ],
+    [ "-V"; "--version" ],
       None,
       [ "print version and exit" ],
       TA.Optional,
-      (fun _ -> Printf.printf "%s\n%!" version; exit 0);
+      (fun _ -> Printf.printf "%s\n%!" info.version; exit 0);
     (* Hidden option to emit help in markdown format *)
     [ "--markdown" ], None, [], TA.Optional, (fun _ -> TA.markdown (); exit 0);
     [ "-h"; "--help" ],
