@@ -14,8 +14,8 @@
 *)
 
 open BiOCamLib
+open Better
 
-module IntMap = Tools.IntMap
 module QualitiesDistribution =
   struct
     include IntMap
@@ -81,8 +81,6 @@ module QualitiesDistribution =
       !res
   end
 type qualities_distribution_t = int QualitiesDistribution.t
-
-module StringMap = Tools.StringMap
 
 module Pileup:
   sig
@@ -548,8 +546,8 @@ module Params =
 
 let info = {
   Tools.Argv.name = "SiNPle";
-  version = "10";
-  date = "25-Mar-2024"
+  version = "11";
+  date = "16-Apr-2024"
 } and authors = [
   "2017-2019", "Luca Ferretti", "luca.ferretti@gmail.com";
   "2017-2019", "Chandana Tennakoon", "drcyber@gmail.com";
