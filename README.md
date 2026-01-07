@@ -37,7 +37,15 @@ There are several possible ways of installing the software on your machine: thro
 
 ### 1.2. Pre-compiled binaries
 
-You can download pre-compiled binaries for Linux and MacOS x86_64 from our [releases](https://github.com/PaoloRibeca/SiNPle/releases).
+You can download pre-compiled binaries for Linux and MacOS x86_64 from our [releases](https://github.com/PaoloRibeca/SiNPle/releases). After doing so, just copy or move them to a directory which is accessible from your PATH.
+
+For instance, supposing that you've downloaded programs to directory `~/.local/bin/`, in order to make them accessible from everywhere you'll have to execute a command such as
+```bash
+export PATH=~/.local/bin:$PATH
+```
+or add it to one of your login scripts (such as `~/.bashrc` or similar for `bash`).
+
+Note that the binaries are generated according to the recipe described [here](https://github.com/PaoloRibeca/ocaml-static-binaries).
 
 ### 1.3. Manual install
 
