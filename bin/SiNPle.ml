@@ -101,7 +101,7 @@ module Pileup:
       refr: string;
       info: (int * qualities_distribution_t) StringMap.t
     }
-    (* The reading is BiOCamLib's now.  Mpileup.summarise counts a position into
+    (* The reading is BiOCamLib's now.  Mpileup.summarize counts a position into
        genotypes over a dense histogram of qualities, where this file used to
        walk the column a character at a time -- allocating a one-character
        string for each of them -- and fold every read into a StringMap of an
@@ -132,7 +132,7 @@ module Pileup:
     let from_mpileup_line ?(quality_offset = 33) ?strand line =
       incr parsed_lines;
       let summary =
-        Mpileup.summarise ~quality_offset ?strand ~line_number:!parsed_lines line in
+        Mpileup.summarize ~quality_offset ?strand ~line_number:!parsed_lines line in
       { seq = summary.Mpileup.Summary.seq; pos = summary.Mpileup.Summary.pos;
         refr = String.make 1 summary.Mpileup.Summary.reference;
         info =
