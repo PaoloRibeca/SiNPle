@@ -91,7 +91,8 @@ module Pileup:
       (* Genotypes are ordered lexicographically here *)
       info: (int * qualities_distribution_t) StringMap.t
     }
-    val from_mpileup_line: ?quality_offset:int -> string -> t
+    val from_mpileup_line:
+      ?quality_offset:int -> ?strand:Sequences.Types.strand_t -> string -> t
   end
 = struct
     type t = {
@@ -100,86 +101,45 @@ module Pileup:
       refr: string;
       info: (int * qualities_distribution_t) StringMap.t
     }
-    let add_to stats what qual =
-      try
-        let num, quals = StringMap.find what stats in
-        let quals =
-          try
-            let cntr = QualitiesDistribution.find qual quals in
-            QualitiesDistribution.add qual (cntr + 1) quals
-          with Not_found ->
-            QualitiesDistribution.add qual 1 quals in
-        StringMap.add what (num + 1, quals) stats
-      with Not_found ->
-        StringMap.add what (1, QualitiesDistribution.singleton qual 1) stats
-    let parsed_lines = ref 1
-    let parse_error s =
-      Printf.eprintf "On line %d: %s\n%!" !parsed_lines s;
-      exit 1
-    let from_mpileup_line ?(quality_offset = 33) line =
-      let line = Array.of_list (String.split_on_char '\t' line) in
-      let len = Array.length line in
-      if len < 6 then
-        parse_error "Insufficient number of fields in input";
-      let refr, pileup, quals = line.(2), line.(4), line.(5) in
-      if String.length refr > 1 then
-        "Invalid reference '" ^ refr ^ "'" |> parse_error;
-      let refr_uc = String.uppercase_ascii refr and refr_lc = String.lowercase_ascii refr
-      and len = String.length pileup and res = ref StringMap.empty in
-      (* Here len might be > 0 even if the pileup is empty ("*") *)
-      if line.(3) <> "0" && len > 0 then begin
-        let quality_from_ascii c = Char.code c - quality_offset
-        and i = ref 0 and qpos = ref 0 in
-        while !i < len do
-          let c = String.sub pileup !i 1 in
-          begin match c with
-          | "A" | "C" | "G" | "T" | "N" | "a" | "c" | "g" | "t" | "n" ->
-            res := add_to !res c (quality_from_ascii quals.[!qpos]);
-            incr qpos
-          | "." ->
-            res := add_to !res refr_uc (quality_from_ascii quals.[!qpos]);
-            incr qpos
-          | "," ->
-            res := add_to !res refr_lc (quality_from_ascii quals.[!qpos]);
-            incr qpos
-          | "+" | "-" as dir -> (* Beginning of indel *)
-            let how_many = ref "" in
-            while begin
-              incr i;
-              let cc = String.sub pileup !i 1 in
-              match cc with
-              | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ->
-                how_many := !how_many ^ cc;
-                true
-              | _ ->
-                false
-            end do
-              ()
-            done;
-            let how_many = int_of_string !how_many in
-            (* In this case the qualities will become known only at some later point *)
-            res := add_to !res (dir ^ String.sub pileup !i how_many) 0;
-            i := !i + how_many - 1
-          | "*" | ">" | "<" ->
-            (* Internal part of indel, soft clips.
-               Due to some mysterious reason, they all come associated with a quality *)
-            incr qpos
-          | "^" -> (* Beginning of a read, followed by a quality *)
-            incr i
-          | "$" -> (* End of read *)
-            ()
-          | _ ->
-            parse_error ("Unknown character '" ^  c ^ "' in pileup")
-          end;
-          incr i
-        done;
-        let qlen = String.length quals in
-        if !qpos <> qlen then
-          Printf.sprintf "Lengths of pileup and qualities are inconsistent (%d vs. %d)" !qpos qlen
-            |> parse_error
-      end;
+    (* The reading is BiOCamLib's now.  Mpileup.summarise counts a position into
+       genotypes over a dense histogram of qualities, where this file used to
+       walk the column a character at a time -- allocating a one-character
+       string for each of them -- and fold every read into a StringMap of an
+       IntMap, which is two allocating tree inserts and two lookups per read.
+       What is rebuilt below is the shape the model expects, and it is rebuilt
+       once per POSITION rather than once per read, which is the whole of the
+       difference: the conversion walks the qualities that are present, of which
+       there are a few dozen, where the counting walked the reads, of which
+       there are thousands.
+       The strand is resolved by the reader and can no longer be resolved after
+       it: a summary merges the two strands and uppercases what it keeps, so
+       which of them is wanted has to be said before the counting rather than
+       filtered out of the result. *)
+    let parsed_lines = ref 0
+    let quals_of (g: Mpileup.Genotype.t) =
+      match g.qualities with
+      | Some qs ->
+        let res = ref QualitiesDistribution.empty in
+        Mpileup.Qualities.iter (fun q c -> res := QualitiesDistribution.add q c !res) qs;
+        !res
+      | None ->
+        (* No quality is assigned by the machine to the presence of an indel,
+           and this file has always recorded that as a zero one.  It has to stay
+           a zero rather than an absence: the cumulative distribution the
+           p-value is taken against merges every genotype's qualities, an
+           indel's included *)
+        QualitiesDistribution.singleton 0 g.count
+    let from_mpileup_line ?(quality_offset = 33) ?strand line =
       incr parsed_lines;
-      { seq = line.(0); pos = int_of_string line.(1); refr = refr; info = !res }
+      let summary =
+        Mpileup.summarise ~quality_offset ?strand ~line_number:!parsed_lines line in
+      { seq = summary.Mpileup.Summary.seq; pos = summary.Mpileup.Summary.pos;
+        refr = String.make 1 summary.Mpileup.Summary.reference;
+        info =
+          List.fold_left
+            (fun acc (g: Mpileup.Genotype.t) ->
+              StringMap.add g.symbol (g.count, quals_of g) acc)
+            StringMap.empty summary.Mpileup.Summary.genotypes }
   end
 
 module Strandedness:
@@ -237,7 +197,7 @@ module [@warning "-32"] Genotype:
       error_rate_indel_short: float;
       error_rate_indel_long: float
     }
-    val from_pileup: Pileup.t -> Strandedness.t -> parameters_t -> t
+    val from_pileup: Pileup.t -> parameters_t -> t
     val to_sinple: t -> string
     val from_sinple: string -> t
     val recalibrate_p_values: t -> parameters_t -> t
@@ -395,42 +355,15 @@ module [@warning "-32"] Genotype:
             end
           end
         end
-    let from_pileup pileup strandedness parameters =
+    let from_pileup pileup parameters =
+      (* What arrives has had its strand resolved by the reader and is already
+         uppercase, both strands summed where both were wanted, so there is
+         nothing to filter here any more *)
       let res = ref [] in
-      (* We kill all unwanted pileup features according to cases *)
-      begin match strandedness with
-      | Strandedness.Forward ->
-        (* Eliminate lowercase *)
-        StringMap.iter
-          (fun s (counts, quals) ->
-            if String.lowercase_ascii s <> s then
-              res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals; p_value= 0. } :: !res)
-          pileup.Pileup.info
-      | Strandedness.Reverse ->
-        (* Eliminate uppercase, and turn lowercase to uppercase *)
-        StringMap.iter
-          (fun s (counts, quals) ->
-            if String.uppercase_ascii s <> s then
-              res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals; p_value= 0. } :: !res)
-          pileup.Pileup.info
-      | Strandedness.Both ->
-        (* Sum lowercase to uppercase, eliminate lowercase *)
-        let new_info = ref StringMap.empty in
-        StringMap.iter
-          (fun s (counts, quals) ->
-            let upp = String.uppercase_ascii s in
-            try
-              let counts_upp, quals_upp = StringMap.find upp !new_info in
-              new_info :=
-                StringMap.add upp (counts_upp + counts, QualitiesDistribution.merge quals_upp quals) !new_info
-            with Not_found ->
-              new_info := StringMap.add upp (counts, quals) !new_info)
-          pileup.Pileup.info;
-        StringMap.iter
-          (fun s (counts, quals) ->
-            res := { symbol = String.uppercase_ascii s; counts = counts; quals = quals; p_value= 0. } :: !res)
-          !new_info
-      end;
+      StringMap.iter
+        (fun symbol (counts, quals) ->
+          res := { symbol = symbol; counts = counts; quals = quals; p_value = 0. } :: !res)
+        pileup.Pileup.info;
       (* In order to be able to compute the p-value we need the cumulative statistics *)
       let acc_acgtn_counts = ref 0 and acc_quals = ref QualitiesDistribution.empty in
       List.iter
@@ -657,9 +590,15 @@ let () =
     error_rate_indel_long = !Params.error_rate_indel_long
   } in
   try
+    (* Decided once: it is a parameter of the run, not of a position *)
+    let strand =
+      match !Params.strandedness with
+      | Strandedness.Forward -> Some Sequences.Types.forward
+      | Strandedness.Reverse -> Some Sequences.Types.reverse
+      | Strandedness.Both -> None in
     while true do
-      let pileup = Pileup.from_mpileup_line (input_line input) in
-      let genotype = Genotype.from_pileup pileup !Params.strandedness parameters in
+      let pileup = Pileup.from_mpileup_line ?strand (input_line input) in
+      let genotype = Genotype.from_pileup pileup parameters in
       Printf.fprintf output "%s\n%!" (Genotype.to_sinple genotype)
     done
   with End_of_file ->
