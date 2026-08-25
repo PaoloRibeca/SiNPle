@@ -477,11 +477,7 @@ module Params =
     let strandedness = ref Defaults.strandedness
   end
 
-let info = {
-  Tools.Argv.name = "SiNPle";
-  version = "11";
-  date = "16-Apr-2024"
-} and authors = [
+let authors = [
   "2017-2019", "Luca Ferretti", "luca.ferretti@gmail.com";
   "2017-2019", "Chandana Tennakoon", "drcyber@gmail.com";
   "2017-2024", "Paolo Ribeca", "paolo.ribeca@gmail.com"
@@ -489,7 +485,9 @@ let info = {
 
 let () =
   let module TA = Tools.Argv in
-  TA.set_header (info, authors, [ BiOCamLib.Info.info ]);
+  (* Version.info is this executable's own generated module; the bare name
+     Info is BiOCamLib's, which 'open BiOCamLib' puts in scope *)
+  TA.set_header (Version.info, authors, [ BiOCamLib.Info.info ]);
   TA.set_synopsis "[OPTIONS]";
   TA.parse [
     TA.make_separator "Algorithmic parameters";
@@ -559,7 +557,7 @@ let () =
       None,
       [ "print version and exit" ],
       TA.Optional,
-      (fun _ -> Printf.printf "%s\n%!" info.version; exit 0);
+      (fun _ -> Printf.printf "%s\n%!" Version.info.version; exit 0);
     (* Hidden option to emit help in markdown format *)
     [ "--markdown" ], None, [], TA.Optional, (fun _ -> TA.markdown (); exit 0);
     [ "-h"; "--help" ],

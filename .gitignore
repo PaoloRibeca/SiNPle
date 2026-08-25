@@ -1,5 +1,6 @@
 _build
 .build
+bin/Version.ml
 build
 /SiNPle
 # Release archives and payload dirs are build artifacts; the release

@@ -149,6 +149,13 @@ build_package() {
       Darwin) profile="release" ;;
       *)      profile="release-static" ;;
     esac
+    # A build tree made before the version moved carries the old version string
+    # inside the binary, so packaging it would put '1.1.1-96' in an archive
+    # named for 1.1.2.  Rebuilding is the only way to restamp it.
+    if [[ -n "$version_arg" && -x "$bindir/SiNPle" ]]; then
+      echo "(BUILD package): version set to $version — rebuilding so the binary carries it ..."
+      rm -rf "$bindir"
+    fi
     if [[ ! -x "$bindir/SiNPle" ]]; then
       echo "(BUILD package): .build/SiNPle missing — building with '$profile' first ..."
       ( cd "$ROOT" && bash BUILD "$profile" )
@@ -291,12 +298,41 @@ fi
 # Always erase build directory to ensure peace of mind
 rm -rf _build
 
-# Emit version info for the vendored BiOCamLib.  The date is formatted by git
-# itself (--date=format) rather than `date -d @<ts>`, which is GNU-only and dies
-# on macOS's BSD date -- and this script now has to run on the macOS CI runner.
-# The version stays the git file-change count.
-( cd "$ROOT/BiOCamLib" \
-  && echo -e "include (\n  struct\n    let info = {\n      Tools.Argv.name = \"BiOCamLib\";\n      version = \"$(git log --pretty=format: --name-only | awk '{if ($0!="") print}' | wc -l)\";\n      date = \"$(git log -1 --format=%ad --date=format:'%d-%b-%Y')\"\n    }\n  end\n)" > lib/Info.ml )
+# Emit version info, for SiNPle and for the BiOCamLib it vendors.  A version is
+# the release named in that repository's releases/CURRENT followed by its
+# commit-file count -- so the part people cite leads, and the suffix still tells
+# two builds of one release apart, which is the whole reason to generate it
+# rather than write it by hand.
+#
+# Two portability notes, both because this script also runs on the macOS CI.
+# The count comes from awk rather than `wc -l`, whose BSD implementation pads
+# its output with leading spaces that would land inside the version string; and
+# the date is formatted by git itself (--date=format) rather than by
+# `date -d @<ts>`, which is GNU-only and fails outright there.
+#
+# SiNPle's own module is Version and not Info: 'open BiOCamLib' in SiNPle.ml
+# shadows a same-named module of this executable, so a bin/Info.ml would leave
+# the library's Info answering to the bare name and SiNPle's own unreachable.
+stamp_version() {
+  local root="$1" name="$2" out="$3" wrapped="$4" release count date
+  release="$(head -n 1 "$root/releases/CURRENT" 2>/dev/null || true)"
+  [[ "$release" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || { echo "BUILD: $name's releases/CURRENT does not hold a valid version (found '$release')" >&2
+         exit 1; }
+  count="$(git -C "$root" log --pretty=format: --name-only | awk 'NF {n++} END {print n+0}')"
+  date="$(git -C "$root" log -1 --format=%ad --date=format:'%d-%b-%Y')"
+  if [[ "$wrapped" == "wrapped" ]]; then
+    # BiOCamLib's Info.ml is a library module and carries the encapsulation
+    echo -e "include (\n  struct\n    let info = {\n      Tools.Argv.name = \"$name\";\n      version = \"$release-$count\";\n      date = \"$date\"\n    }\n  end\n)" > "$out"
+  else
+    # A module of the executable, not of the library, so it has to open
+    # BiOCamLib itself to reach Tools.Argv
+    echo -e "open BiOCamLib\nlet info = {\n  Tools.Argv.name = \"$name\";\n  version = \"$release-$count\";\n  date = \"$date\"\n}" > "$out"
+  fi
+}
+
+stamp_version "$ROOT" SiNPle "$ROOT/bin/Version.ml" plain
+stamp_version "$ROOT/BiOCamLib" BiOCamLib "$ROOT/BiOCamLib/lib/Info.ml" wrapped
 
 #FLAGS="--verbose"
 
