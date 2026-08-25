@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+#
+# SiNPle/test/characterise.sh -- check that SiNPle still says what it said.
+#
+# Not an assertion suite: what it pins is the whole output, line for line,
+# against a recording made before the reader was replaced.  That is what a
+# characterisation test is for -- the model is not being changed, so any
+# difference at all is a regression, and the cheapest way to see one is to
+# diff.
+#
+# The pileups are not stored: they run to tens of megabytes, while the BAMs
+# they come from are already in testdata/, so each is regenerated with the
+# samtools invocation the README prescribes.  What IS stored is SiNPle's
+# output, xz-compressed, which is a few hundred kilobytes.
+#
+# Usage:
+#   bash test/characterise.sh            # check against the recordings
+#   bash test/characterise.sh --record   # make new recordings (do this
+#                                        # BEFORE a change, never after one)
+
+set -e
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EXPECTED="$ROOT/test/expected"
+BINARY="$ROOT/.build/SiNPle"
+
+# The cases: one BAM each, chosen to span the depths SiNPle meets -- a shallow
+# one, a thousand-fold one, and the deepest available, since the arithmetic
+# that rounds differently is the arithmetic over many reads.
+CASES=(
+  "per0_6.100    5000.per0_6.polio.pcr.fasta.100.bam"
+  "per1.1000     5000.per1.polio.pcr.fasta.1000.bam"
+  "per5.5000     5000.per5.polio.pcr.fasta.5000.bam"
+  "blastmap      blastmap.100K.bam"
+)
+
+# The invocation from README.md.  It has to stay in step with it: SiNPle assumes
+# the input is synchronised, i.e. produced with -a -a, and a recording made any
+# other way pins the wrong thing.
+mpileup_of() {
+  samtools mpileup -d 1000000 -a -A -B -Q 0 -x "$1"
+}
+
+RECORD=0
+[[ "${1:-}" == "--record" ]] && RECORD=1
+
+# An absent samtools must be loud rather than quiet: a characterisation check
+# that silently runs zero cases is indistinguishable from one that passes.
+command -v samtools >/dev/null 2>&1 \
+  || { echo "characterise: samtools not found -- cannot regenerate the pileups" >&2; exit 1; }
+[[ -x "$BINARY" ]] \
+  || { echo "characterise: $BINARY not found -- run 'bash BUILD' first" >&2; exit 1; }
+
+mkdir -p "$EXPECTED"
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+
+failed=0
+checked=0
+for entry in "${CASES[@]}"; do
+  read -r name bam <<< "$entry"
+  bam="$ROOT/testdata/$bam"
+  [[ -f "$bam" ]] \
+    || { echo "characterise: $bam not found" >&2; exit 1; }
+  echo "  $name ..."
+  mpileup_of "$bam" 2>/dev/null > "$scratch/$name.pileup"
+  "$BINARY" < "$scratch/$name.pileup" > "$scratch/$name.out"
+  if (( RECORD )); then
+    xz -c "$scratch/$name.out" > "$EXPECTED/$name.sinple.xz"
+    echo "    recorded $(wc -l < "$scratch/$name.out") lines"
+  else
+    [[ -f "$EXPECTED/$name.sinple.xz" ]] \
+      || { echo "    no recording -- run with --record first" >&2; exit 1; }
+    xz -dc "$EXPECTED/$name.sinple.xz" > "$scratch/$name.expected"
+    if diff -q "$scratch/$name.expected" "$scratch/$name.out" >/dev/null; then
+      echo "    ok, $(wc -l < "$scratch/$name.out") lines identical"
+    else
+      echo "    DIFFERS from the recording:"
+      diff "$scratch/$name.expected" "$scratch/$name.out" | head -20 | sed 's/^/      /'
+      failed=$((failed + 1))
+    fi
+    checked=$((checked + 1))
+  fi
+done
+
+if (( RECORD )); then
+  echo "characterise: recorded ${#CASES[@]} case(s) into test/expected/"
+  exit 0
+fi
+
+# Say how many ran as well as how many failed: a run that checked nothing is
+# not a run that passed.
+echo "characterise: $checked case(s) checked, $failed differing"
+(( failed == 0 )) || exit 1
