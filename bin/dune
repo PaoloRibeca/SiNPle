@@ -1,7 +1,17 @@
+; Four profiles, as in the other repositories of the family.  The '-static'
+; pair is what a distributable Linux binary wants, so that it runs on a host
+; lacking the shared libraries (GMP, for zarith); 'release' is left dynamic
+; because macOS has no static libSystem and '-ccopt -static' will not link
+; there, and the macOS CI builds with it.  SiNPle keeps -O3 on every profile,
+; being run at every position of a genome.
 (env
   (dev
     (ocamlopt_flags (:standard -O3 -ccopt -O3)))
+  (dev-static
+    (ocamlopt_flags (:standard -O3 -ccopt -O3 -ccopt -static)))
   (release
+    (ocamlopt_flags (:standard -O3 -ccopt -O3)))
+  (release-static
     (ocamlopt_flags (:standard -O3 -ccopt -O3 -ccopt -static))))
 
 (executables

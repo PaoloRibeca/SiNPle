@@ -1,3 +1,8 @@
-SiNPle
 _build
-releases
+.build
+build
+/SiNPle
+# Release archives and payload dirs are build artifacts; the release
+# source-of-truth (MANIFEST, CURRENT) stays tracked.
+releases/CURRENT~
+releases/SiNPle-*
