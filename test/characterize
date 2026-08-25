@@ -52,6 +52,16 @@ command -v samtools >/dev/null 2>&1 \
 [[ -x "$BINARY" ]] \
   || { echo "$SELF: $BINARY not found -- run 'bash BUILD' first" >&2; exit 1; }
 
+# A binary left over from an EARLIER build is the one way this check can report
+# success about code that was never compiled: the build fails, .build still
+# holds yesterday's binary, and four cases come back identical because they are
+# testing yesterday.  Comparing versions in two places would drift; asking
+# whether any source is newer than the binary cannot.
+STALE="$(find "$ROOT/bin" "$ROOT/BiOCamLib/lib" -name '*.ml' -newer "$BINARY" -print -quit 2>/dev/null || true)"
+[[ -z "$STALE" ]] \
+  || { echo "$SELF: $BINARY is older than $STALE -- rebuild first, or this checks a stale binary" >&2
+       exit 1; }
+
 mkdir -p "$EXPECTED"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
