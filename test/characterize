@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# SiNPle/test/characterise.sh -- check that SiNPle still says what it said.
+# SiNPle/test/characterize -- check that SiNPle still says what it said.
 #
 # Not an assertion suite: what it pins is the whole output, line for line,
 # against a recording made before the reader was replaced.  That is what a
@@ -14,12 +14,13 @@
 # output, xz-compressed, which is a few hundred kilobytes.
 #
 # Usage:
-#   bash test/characterise.sh            # check against the recordings
-#   bash test/characterise.sh --record   # make new recordings (do this
-#                                        # BEFORE a change, never after one)
+#   bash test/characterize            # check against the recordings
+#   bash test/characterize --record   # make new recordings (do this
+#                                     # BEFORE a change, never after one)
 
 set -e
 
+SELF="$(basename "${BASH_SOURCE[0]}")"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTED="$ROOT/test/expected"
 BINARY="$ROOT/.build/SiNPle"
@@ -47,9 +48,9 @@ RECORD=0
 # An absent samtools must be loud rather than quiet: a characterisation check
 # that silently runs zero cases is indistinguishable from one that passes.
 command -v samtools >/dev/null 2>&1 \
-  || { echo "characterise: samtools not found -- cannot regenerate the pileups" >&2; exit 1; }
+  || { echo "$SELF: samtools not found -- cannot regenerate the pileups" >&2; exit 1; }
 [[ -x "$BINARY" ]] \
-  || { echo "characterise: $BINARY not found -- run 'bash BUILD' first" >&2; exit 1; }
+  || { echo "$SELF: $BINARY not found -- run 'bash BUILD' first" >&2; exit 1; }
 
 mkdir -p "$EXPECTED"
 scratch="$(mktemp -d)"
@@ -61,7 +62,7 @@ for entry in "${CASES[@]}"; do
   read -r name bam <<< "$entry"
   bam="$ROOT/testdata/$bam"
   [[ -f "$bam" ]] \
-    || { echo "characterise: $bam not found" >&2; exit 1; }
+    || { echo "$SELF: $bam not found" >&2; exit 1; }
   echo "  $name ..."
   mpileup_of "$bam" 2>/dev/null > "$scratch/$name.pileup"
   "$BINARY" < "$scratch/$name.pileup" > "$scratch/$name.out"
@@ -84,11 +85,11 @@ for entry in "${CASES[@]}"; do
 done
 
 if (( RECORD )); then
-  echo "characterise: recorded ${#CASES[@]} case(s) into test/expected/"
+  echo "$SELF: recorded ${#CASES[@]} case(s) into test/expected/"
   exit 0
 fi
 
 # Say how many ran as well as how many failed: a run that checked nothing is
 # not a run that passed.
-echo "characterise: $checked case(s) checked, $failed differing"
+echo "$SELF: $checked case(s) checked, $failed differing"
 (( failed == 0 )) || exit 1
