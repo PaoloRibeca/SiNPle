@@ -75,7 +75,9 @@ jobs:
       - name: Install OCaml dependencies
         # menhir, zarith, gg and vg are BiOCamLib's (gg and vg, whose vg.pdf
         # backend is pure OCaml, came in with BiOCamLib.Plot); SiNPle adds nothing.
-        run: opam install --yes dune menhir zarith gg vg
+        # otfm too: vg lists it only as optional and builds vg.pdf only when it is
+        # installed, so without it Plot does not compile though no dune file names it.
+        run: opam install --yes dune menhir zarith gg vg otfm
 
       - name: Build binary
         # Plain 'release', not 'release-static': macOS has no static libSystem,
