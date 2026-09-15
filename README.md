@@ -29,7 +29,7 @@ If you use `SiNPle`, please cite
 >
 > OCaml is highly portable and you might be able to manually compile/install everything successfully on other platforms (for instance, Windows) but you will have to do it yourself. 
 
-There are several possible ways of installing the software on your machine: through `conda`; by downloading pre-compiled binaries (Linux and MacOS x86_64 only); or manually.
+There are several possible ways of installing the software on your machine: through `conda`; by downloading pre-compiled binaries (Linux x86_64, and macOS on Apple Silicon or Intel); or manually.
 
 ### 1.1. Conda channel
 
@@ -37,32 +37,33 @@ There are several possible ways of installing the software on your machine: thro
 
 ### 1.2. Pre-compiled binaries
 
-You can download pre-compiled binaries for Linux and MacOS x86_64 from our [releases](https://github.com/PaoloRibeca/SiNPle/releases). After doing so, just copy or move them to a directory which is accessible from your PATH.
+Pre-compiled binaries for Linux (x86_64) and macOS (Apple Silicon and Intel) are published on our [releases](https://github.com/PaoloRibeca/SiNPle/releases) page. Download the archive for your platform, unpack it, and copy or move the `SiNPle` binary it contains to a directory which is accessible from your PATH.
 
-For instance, supposing that you've downloaded programs to directory `~/.local/bin/`, in order to make them accessible from everywhere you'll have to execute a command such as
+For instance, supposing that you've copied the binary to directory `~/.local/bin/`, in order to make them accessible from everywhere you'll have to execute a command such as
 ```bash
 export PATH=~/.local/bin:$PATH
 ```
 or add it to one of your login scripts (such as `~/.bashrc` or similar for `bash`).
 
-Note that the binaries are generated according to the recipe described [here](https://github.com/PaoloRibeca/ocaml-static-binaries).
+The Linux binaries are statically linked according to the recipe described [here](https://github.com/PaoloRibeca/ocaml-static-binaries) and have no runtime dependencies. The macOS binaries use the GMP library as installed by [Homebrew](https://brew.sh), so on a Mac type `brew install gmp` before running them.
 
 ### 1.3. Manual install
 
-Alternatively, you can install `SiNPle` manually by cloning and compiling its sources. You'll need an up-to-date distribution of the OCaml compiler and the [Dune package manager](https://github.com/ocaml/dune) for that. Both can be installed through [OPAM](https://opam.ocaml.org/), the official OCaml distribution system. Once you have a working OPAM distribution you'll also have a working OCaml compiler, and Dune can be installed with the command
+Alternatively, you can install `SiNPle` manually by cloning and compiling its sources. You'll need an up-to-date distribution of the OCaml compiler and the [Dune package manager](https://github.com/ocaml/dune) for that, plus the OCaml packages `menhir` and `zarith` (the latter needs the GMP library). All of them can be installed through [OPAM](https://opam.ocaml.org/), the official OCaml distribution system. Once you have a working OPAM distribution you'll also have a working OCaml compiler, and the rest can be installed with the command
 ```
-$ opam install dune
+$ opam install dune menhir zarith
 ```
-if it is not already present. Make sure that you install OCaml version 4.12 or later.
+if not already present. Make sure that you install OCaml version 4.14 or later.
 
-You'll also need a copy of the sources for the [BiOCamLib library](https://github.com/PaoloRibeca/BiOCamLib). We'll assume that you have cloned the repository in the directory `../BiOCamLib` with respect to the `SiNPle` sources; you'll have to modify the file `BUILD` in the `SiNPle` directory if that is not the case.
-
-Then go to the directory into which you have downloaded the latest `SiNPle` sources, and type
+`SiNPle` is built on the [BiOCamLib library](https://github.com/PaoloRibeca/BiOCamLib), which comes with it as a Git submodule, so clone the repository with `--recursive` to pull it in:
 ```
-$ ./BUILD
+$ git clone --recursive git@github.com:PaoloRibeca/SiNPle.git
 ```
-
-That should generate the executable `SiNPle`. Copy it to some favourite location in your PATH, for instance `~/.local/bin`.
+The version the program reports is worked out from the history of the repository, so build from a full clone like the one above: a downloaded archive of the sources does not build, and a shallow clone (made with `--depth`) reports a wrong version. Then go to the directory into which you have cloned the sources, and type
+```
+$ bash BUILD release-static
+```
+(or `bash BUILD release` on macOS, where fully static linking is not possible). That leaves the executable in `.build/SiNPle`; copy it to some favourite location in your PATH, for instance `~/.local/bin`. If `samtools` is installed, the build also checks the new executable against recorded output (`test/characterize`).
 
 ## 2. How to run it
 
@@ -76,7 +77,7 @@ $ samtools mpileup -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle > variants.t
   
 ## 3. Interpreting the output
 
-The output generated by `SiNPle` is made of tab-separated lines, one for each position of the sequence(s) being explored for which there is converage in the pileup. The number of columns is variable, and equals $2+4*n$, where $n$ is the number of genotypes &mdash; i.e., the different symbols occurring in the pileup; they might be nucleotides such as `A`, `C`, `G`, `T`, `N`, or indels such as `+AAA`. An example record might be
+The output generated by `SiNPle` is made of tab-separated lines, one for each position of the sequence(s) being explored for which there is coverage in the pileup. The number of columns is variable, and equals $2+4*n$, where $n$ is the number of genotypes &mdash; i.e., the different symbols occurring in the pileup; they might be nucleotides such as `A`, `C`, `G`, `T`, `N`, or indels such as `+AAA`. An example record might be
 
 `My_precious`<kbd>Tab</kbd>`12037`<kbd>Tab</kbd>`A`<kbd>Tab</kbd>`85760`<kbd>Tab</kbd>`36.7`<kbd>Tab</kbd>`1`<kbd>Tab</kbd>`G`<kbd>Tab</kbd>`61`<kbd>Tab</kbd>`35.3`<kbd>Tab</kbd>`0.0243`
  
@@ -90,9 +91,9 @@ are sequence name and position. They are followed by groups of four columns, suc
 
 which are the sequence of the genotype at that position (`A` in this case) with the number of reads it occurs in (85760), the average sequencing (_not_ alignment) quality for such reads, and the posterior probability that that genotype is actually present in what you are sequencing (1 in this case).
 
-In general there'll be more than one genotype in the output for each position (as many as seen in the pileup, in fact) possibly including the one present in the reference, which has no special status in the model used by `SiNPle`. They are all considered independently, as the statistical hypothesis is that we are in the presence of a mixture of genotypes. In this case, at this position one also sees 61 `G`s, but, given the priors, the frequencies, and the qualities, the model thinks it is noise (posterior probability $p=0.0234$). That is not always the case, and, as expected, sometimes you can have several genotypes whose presence at the same position is considered statistically significant by `SiNPle`.
+In general there'll be more than one genotype in the output for each position (as many as seen in the pileup, in fact) possibly including the one present in the reference, which has no special status in the model used by `SiNPle`. They are all considered independently, as the statistical hypothesis is that we are in the presence of a mixture of genotypes. In this case, at this position one also sees 61 `G`s, but, given the priors, the frequencies, and the qualities, the model thinks it is noise (posterior probability $p=0.0243$). That is not always the case, and, as expected, sometimes you can have several genotypes whose presence at the same position is considered statistically significant by `SiNPle`.
 
-Typically you would keep genotypes that have, for instance, $p>=0.95$. The priors can be adjusted as needed, in particular the ones for indels.
+Typically you would keep genotypes that have, for instance, $p\geq 0.95$. The priors can be adjusted as needed, in particular the ones for indels.
 
 ## 4. Command line syntax
 
@@ -102,10 +103,11 @@ $ SiNPle -h
 ```
 in your terminal. You will see a header containing information about the version:
 ```
-This is the SiNPle variant calling program (version 0.9)
- (c) 2017-2019 Luca Ferretti, <luca.ferretti@gmail.com>
- (c) 2017-2019 Chandana Tennakoon, <drcyber@gmail.com>
- (c) 2017-2022 Paolo Ribeca, <paolo.ribeca@gmail.com>
+This is SiNPle version 1.1.1-105 [25-Aug-2026]
+ compiled against: BiOCamLib version 1.3.3-986 [15-Sep-2026]
+ (c) 2017-2019 Luca Ferretti <luca.ferretti@gmail.com>
+     2017-2019 Chandana Tennakoon <drcyber@gmail.com>
+     2017-2024 Paolo Ribeca <paolo.ribeca@gmail.com>
 ```
 followed by detailed information. The general form(s) the command can be used is:
 ```
@@ -116,28 +118,27 @@ SiNPle [OPTIONS]
 
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
-| `-t`<br>`--theta` | _&lt;non\_negative\_float&gt;_ |  prior estimate of nucleotide diversity | <ins>default=<mark>_0\.001_</mark></ins> |
-| `-T`<br>`--theta-indel` | _&lt;non\_negative\_float&gt;_ |  prior estimate of indel likelihood | <ins>default=<mark>_0\.0001_</mark></ins> |
-| `-I`<br>`--quality-indel-short` | _&lt;non\_negative\_integer&gt;_ |  prior Phred\-scaled quality for indels of length 1 | <ins>default=<mark>_35_</mark></ins> |
-| `-L`<br>`--quality-indel-long` | _&lt;non\_negative\_integer&gt;_ |  prior Phred\-scaled quality for indels of length &gt;1 | <ins>default=<mark>_45_</mark></ins> |
-| `-p`<br>`--pcr-error-rate` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for PCR\-generated substitutions | <ins>default=<mark>_5e\-07_</mark></ins> |
-| `-P`<br>`--pcr-error-rate-indel` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for PCR\-generated indels | <ins>default=<mark>_5e\-08_</mark></ins> |
-| `--error-rate` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for sequencing\-generated substitutions | <ins>default=<mark>_0\.0001_</mark></ins> |
-| `--error-rate-indel-short` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for sequencing\-generated indels of length 1 | <ins>default=<mark>_1e\-05_</mark></ins> |
-| `--error-rate-indel-long` | _&lt;non\_negative\_float&gt;_ |  prior estimate of error rate for sequencing\-generated indels of length &gt;1 | <ins>default=<mark>_1e\-06_</mark></ins> |
+| `-t`<br>`--theta` | _non\_negative\_float_ |  prior estimate of nucleotide diversity | <ins>default=<mark>_0\.001_</mark></ins> |
+| `-T`<br>`--theta-indel` | _non\_negative\_float_ |  prior estimate of indel likelihood | <ins>default=<mark>_0\.0001_</mark></ins> |
+| `-I`<br>`--quality-indel-short` | _non\_negative\_integer_ |  prior Phred-scaled quality for indels of length 1 | <ins>default=<mark>_35_</mark></ins> |
+| `-L`<br>`--quality-indel-long` | _non\_negative\_integer_ |  prior Phred-scaled quality for indels of length &gt;1 | <ins>default=<mark>_45_</mark></ins> |
+| `-p`<br>`--pcr-error-rate` | _non\_negative\_float_ |  prior estimate of error rate for PCR-generated substitutions | <ins>default=<mark>_5e-07_</mark></ins> |
+| `-P`<br>`--pcr-error-rate-indel` | _non\_negative\_float_ |  prior estimate of error rate for PCR-generated indels | <ins>default=<mark>_5e-08_</mark></ins> |
+| `--error-rate` | _non\_negative\_float_ |  prior estimate of error rate for sequencing-generated substitutions | <ins>default=<mark>_0\.0001_</mark></ins> |
+| `--error-rate-indel-short` | _non\_negative\_float_ |  prior estimate of error rate for sequencing-generated indels of length 1 | <ins>default=<mark>_1e-05_</mark></ins> |
+| `--error-rate-indel-long` | _non\_negative\_float_ |  prior estimate of error rate for sequencing-generated indels of length &gt;1 | <ins>default=<mark>_1e-06_</mark></ins> |
 | `-s`<br>`-S`<br>`--strandedness` | _forward&#124;reverse&#124;both_ |  strands to be taken into account for counts | <ins>default=<mark>_both_</mark></ins> |
 
 **Input/Output**
 
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
-| `-i`<br>`--input` | _&lt;input\_file&gt;_ |  name of input file (in mpileup format) | <ins>default=<mark>_&lt;stdin&gt;_</mark></ins> |
-| `-o`<br>`--output` | _&lt;output\_file&gt;_ |  name of output file | <ins>default=<mark>_&lt;stdout&gt;_</mark></ins> |
+| `-i`<br>`--input` | _input\_file_ |  name of input file \(in mpileup format\) | <ins>default=<mark>_&lt;stdin&gt;_</mark></ins> |
+| `-o`<br>`--output` | _output\_file_ |  name of output file | <ins>default=<mark>_&lt;stdout&gt;_</mark></ins> |
 
 **Miscellaneous**
 
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
-| `-v`<br>`--version` |  |  print version and exit |  |
+| `-V`<br>`--version` |  |  print version and exit |  |
 | `-h`<br>`--help` |  |  print syntax and exit |  |
-
