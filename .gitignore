@@ -1,8 +1,8 @@
 _build
 .build
 bin/Version.ml
-build
-/SiNPle
+SiNPle.opam
+.claude
 # Release archives and payload dirs are build artifacts; the release
 # source-of-truth (MANIFEST, CURRENT) stays tracked.
 releases/CURRENT~

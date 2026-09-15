@@ -14,12 +14,15 @@
   (release-static
     (ocamlopt_flags (:standard -O3 -ccopt -O3 -ccopt -static))))
 
-(executables
- (public_names SiNPle)
- (names SiNPle)
+(executable
+ (name SiNPle)
  (libraries str unix BiOCamLib))
 
+; No `public_names` beside the `install` stanza: both generate
+; _build/install/default/bin/SiNPle, and dune refuses the duplicate rule, so
+; `dune build @install` could not work.  The stanza is the one kept, as in d1avolo,
+; Gimlet and BioTattoo, and installs the executable under its plain name.
 (install
  (section bin)
  (files
-  (SiNPle as SiNPle)))
+  (SiNPle.exe as SiNPle)))

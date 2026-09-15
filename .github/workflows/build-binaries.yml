@@ -1,18 +1,22 @@
 name: Build macOS binaries
 
-# Cross-build the macOS SiNPle binary that cannot be produced on the Linux
-# development machine, and upload it as an artifact.  On the dev machine,
-# 'bash BUILD mac-end' downloads them and hands each directory to the BUILD
-# script's 'package' target to assemble the release archive locally:
+# Build on GitHub's macOS runners the SiNPle binary that cannot be produced on
+# the Linux development machine, and upload it as an artifact.  On the dev
+# machine, 'bash BUILD mac-end' downloads them and packages each directory the
+# way the BUILD script's 'package' target would:
 #
 #   PACKAGE_PLATFORM=Darwin-arm64 PACKAGE_BINDIR=./SiNPle-Darwin-arm64 \
-#     bash BUILD package 1.1.2
+#     bash BUILD package
+#
+# (no version argument: one given would replace releases/CURRENT, whereas these
+# archives share the version the tagged commit already carries).
 #
 # SiNPle is pure OCaml, so the macOS binary is built exactly like the Linux one
 # (no C/C++ path, no dune patching) — the only system dependency is GMP, for
-# zarith, reached through the vendored BiOCamLib.  Everything else in a release
-# (LICENSE, README.pdf, versioning, archive naming) is platform-independent and
-# stays in the local BUILD script.
+# zarith, reached through the vendored BiOCamLib.  BUILD's 'package' and
+# 'mac-end' targets both forward to BiOCamLib/tools/release; what ships
+# (LICENSE, README.pdf, ...) is listed in releases/MANIFEST, and versioning and
+# archive naming belong to tools/release.
 
 on:
   # Manual runs and version tags only — never on every push, so the metered
@@ -53,10 +57,10 @@ jobs:
           # library SiNPle links against, so without this the build has no
           # lib/ to compile at all.
           submodules: recursive
-          # Full history: BUILD derives BiOCamLib's version string from the
-          # commit-file count of the SUBMODULE, so a shallow clone would stamp
-          # the binary with a bogus version.  fetch-depth 0 applies to the
-          # submodules too.
+          # Full history: BUILD stamps both SiNPle and the BiOCamLib submodule
+          # with BiOCamLib/tools/stamp-version, whose version carries the
+          # commit-file count of each, so a shallow clone would stamp the binary
+          # with a bogus version.  fetch-depth 0 applies to the submodules too.
           fetch-depth: 0
 
       - name: Install system dependencies
@@ -74,7 +78,8 @@ jobs:
 
       - name: Build binary
         # Plain 'release', not 'release-static': macOS has no static libSystem,
-        # so -ccopt -static won't link.
+        # so -ccopt -static won't link.  The runner has no samtools, so BUILD
+        # skips the characterization check and says so.
         run: opam exec -- bash BUILD release
 
       - name: Stage binaries
@@ -99,7 +104,7 @@ jobs:
           done
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SiNPle-Darwin-${{ matrix.arch }}
           path: dist/
