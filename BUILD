@@ -74,12 +74,11 @@ case "$PROFILE" in
     ;;
 esac
 
-# Emit version info, for SiNPle and for the BiOCamLib it vendors.  SiNPle's
-# module is Version and not Info because 'open BiOCamLib' in SiNPle.ml shadows a
-# same-named module of this executable, which would leave the library's Info
-# answering to the bare name; --open is what lets it reach Tools.Argv at all,
-# being a module of the executable rather than of the library.
-bash "$TOOLS/stamp-version" --root "$ROOT" --out "$ROOT/bin/Version.ml" --open SiNPle
+# Emit version info, for SiNPle and for the BiOCamLib it vendors.  SiNPle's goes
+# into its library, as SiNPle.Info, where the command and whatever else links the
+# library find it; --open is what lets it reach Tools.Argv, the module being
+# outside BiOCamLib.
+bash "$TOOLS/stamp-version" --root "$ROOT" --out "$ROOT/lib/Info.ml" --open SiNPle
 bash "$TOOLS/stamp-version" --root "$ROOT/BiOCamLib" --out "$ROOT/BiOCamLib/lib/Info.ml" \
   BiOCamLib AnnoTools Cophenetic FASTools NJ Octopus Parallel RC TREx Yggdrasill
 
@@ -87,16 +86,16 @@ bash "$TOOLS/stamp-version" --root "$ROOT/BiOCamLib" --out "$ROOT/BiOCamLib/lib/
 # fails must not leave the binary of an earlier one in .build, where 'package'
 # would take it for current.  Stamping comes first, so that a tree without
 # history fails before anything is removed.
-rm -rf _build .build
-mkdir .build
+rm -rf "$ROOT/_build" "$ROOT/.build"
+mkdir "$ROOT/.build"
 
 #FLAGS="--verbose"
 
-"${DUNE[@]}" --profile="$PROFILE" bin/SiNPle.exe $FLAGS
+"${DUNE[@]}" --profile="$PROFILE" bin/Caller.exe $FLAGS
 
-cp _build/default/bin/SiNPle.exe .build/SiNPle
+cp "$ROOT/_build/default/bin/Caller.exe" "$ROOT/.build/SiNPle"
 
-chmod 755 .build/*
+chmod 755 "$ROOT"/.build/*
 
 # The characterization check, run here so that what it checks is necessarily the
 # binary just built: 'set -e' means a failed build never reaches this line, which
@@ -114,6 +113,6 @@ else
 fi
 
 if [[ "$PROFILE" == "release" || "$PROFILE" == "release-static" ]]; then
-  strip .build/*
-  rm -rf _build
+  strip "$ROOT"/.build/*
+  rm -rf "$ROOT/_build"
 fi

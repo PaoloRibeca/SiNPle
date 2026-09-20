@@ -14,9 +14,11 @@
   (release-static
     (ocamlopt_flags (:standard -O3 -ccopt -O3 -ccopt -static))))
 
+; The command is the module Caller, not SiNPle: the model is the library SiNPle
+; in lib/, and an executable module of the same name would shadow it
 (executable
- (name SiNPle)
- (libraries str unix BiOCamLib))
+ (name Caller)
+ (libraries str unix BiOCamLib SiNPle))
 
 ; No `public_names` beside the `install` stanza: both generate
 ; _build/install/default/bin/SiNPle, and dune refuses the duplicate rule, so
@@ -25,4 +27,4 @@
 (install
  (section bin)
  (files
-  (SiNPle.exe as SiNPle)))
+  (Caller.exe as SiNPle)))

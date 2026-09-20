@@ -67,12 +67,18 @@ $ bash BUILD release-static
 
 ## 2. How to run it
 
-`SiNPle` reads as input the pileup format produced by commands such as `samtools mpileup`.
+`SiNPle` reads as input the pileup format produced by commands such as `samtools mpileup`, or, with `--map`, the GEM mapper's own output.
 
 An example of generating SiNPle variant calls from the bamfile example.bam would be
 
 ```
 $ samtools mpileup -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle > variants.txt
+```
+
+With GEM, no BAM or pileup is needed: `gem3-mapper -F MAP` writes every placement of every read on the read's line, and `SiNPle` walks that against the reference the reads were mapped to, reading what each read says about each position directly. The reads must come from FASTQ, as the model needs their qualities; `--strata` says how many of a read's best strata of placements count (1 by default, its best placements alone), every placement in them counting, so that a read on several copies of a repeat is evidence at each of them.
+
+```
+$ gem3-mapper -I reference.gem -i reads.fastq -M all -F MAP | SiNPle --map reference.fasta > variants.txt
 ```
   
 ## 3. Interpreting the output
@@ -133,7 +139,9 @@ SiNPle [OPTIONS]
 
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
-| `-i`<br>`--input` | _input\_file_ |  name of input file \(in mpileup format\) | <ins>default=<mark>_&lt;stdin&gt;_</mark></ins> |
+| `-i`<br>`--input` | _input\_file_ |  name of input file \(in mpileup format, or with \-\-map in GEM MAP format\) | <ins>default=<mark>_&lt;stdin&gt;_</mark></ins> |
+| `-m`<br>`--map` | _reference\_fasta\_file_ |  the input is what gem3\-mapper \-F MAP wrote for the reads mapped to the given reference rather than an mpileup: what the reads say about each position is read off it directly\. The reads must have been mapped from FASTQ, as the model needs their qualities | <ins>default=<mark>_&lt;none&gt;_</mark></ins> |
+| `--strata` | _positive\_integer_ |  with \-\-map, count only the placements in the first that many non\-empty strata of each read, a stratum being its placements with the same number of errors: 1 keeps its best placements alone | <ins>default=<mark>_1_</mark></ins> |
 | `-o`<br>`--output` | _output\_file_ |  name of output file | <ins>default=<mark>_&lt;stdout&gt;_</mark></ins> |
 
 **Miscellaneous**

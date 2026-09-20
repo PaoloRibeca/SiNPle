@@ -1,6 +1,6 @@
 _build
 .build
-bin/Version.ml
+lib/Info.ml
 SiNPle.opam
 .claude
 # Release archives and payload dirs are build artifacts; the release

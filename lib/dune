@@ -1,0 +1,5 @@
+; The model as a library, which the caller in bin/ and anything else that has a
+; pileup summary in hand can call directly
+(library
+ (name SiNPle)
+ (libraries str unix BiOCamLib))
