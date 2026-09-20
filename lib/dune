@@ -1,5 +1,9 @@
 ; The model as a library, which the caller in bin/ and anything else that has a
-; pileup summary in hand can call directly
+; pileup summary in hand can call directly.  It is public, under this
+; repository's own package, because a private library is visible only within its
+; own dune project: a repository vendoring this one, as NINJA does, links it from
+; a project of its own
 (library
  (name SiNPle)
+ (public_name SiNPle)
  (libraries str unix BiOCamLib))
