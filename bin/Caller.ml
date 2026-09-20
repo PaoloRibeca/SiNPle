@@ -59,6 +59,9 @@ module Defaults =
     let output_file = ""
     let map_reference = ""
     let strata = 1
+    let vcf = ""
+    let vcf_min_posterior = 0.95
+    let vcf_sample = "sample"
     let theta = 0.001
     let q_indel_short = 35
     let q_indel_long = 45
@@ -75,6 +78,9 @@ module Params =
     let output_file = ref Defaults.output_file
     let map_reference = ref Defaults.map_reference
     let strata = ref Defaults.strata
+    let vcf = ref Defaults.vcf
+    let vcf_min_posterior = ref Defaults.vcf_min_posterior
+    let vcf_sample = ref Defaults.vcf_sample
     let theta = ref Defaults.theta
     let theta_indel = ref (Defaults.theta /. 10.)
     let q_indel_short = ref Defaults.q_indel_short
@@ -176,6 +182,25 @@ let () =
       [ "name of output file" ],
       TA.Default (fun () -> if !Params.output_file = "" then "<stdout>" else !Params.output_file),
       (fun _ -> Params.output_file := TA.get_parameter() );
+    [ "--vcf" ],
+      Some "<vcf_file>",
+      [ "also write the calls as VCF to the given file: one record per site";
+        "where a genotype other than the reference base's has a posterior";
+        "at or above --vcf-minimum-posterior, those genotypes being its";
+        "alternate alleles. The reference base must be known, which it is";
+        "with --map and with an mpileup made with -f" ],
+      TA.Default (fun () -> if !Params.vcf = "" then "<none>" else !Params.vcf),
+      (fun _ -> Params.vcf := TA.get_parameter ());
+    [ "--vcf-minimum-posterior" ],
+      Some "<fraction>",
+      [ "the posterior a genotype needs to be an alternate allele in the VCF" ],
+      TA.Default (fun () -> string_of_float !Params.vcf_min_posterior),
+      (fun _ -> Params.vcf_min_posterior := TA.get_parameter_float_fraction ());
+    [ "--vcf-sample" ],
+      Some "<name>",
+      [ "the name of the VCF's one sample" ],
+      TA.Default (fun () -> !Params.vcf_sample),
+      (fun _ -> Params.vcf_sample := TA.get_parameter ());
     TA.make_separator "Miscellaneous";
     [ "-V"; "--version" ],
       None,
@@ -213,26 +238,53 @@ let () =
   } in
   (* Decided once: it is a parameter of the run, not of a position *)
   let strand = Strandedness.to_strand !Params.strandedness in
+  (* The reference the reads were mapped to, its sequences named as the mapper names them *)
+  let reference =
+    if !Params.map_reference = "" then
+      None
+    else begin
+      let res = ref [] in
+      Files.Reads.iter ~linter:Fun.id ~verbose:false
+        (fun (_, _, { Files.Base.Read.tag; seq; _ }) ->
+          List.accum res (List.hd (String.split_on_char ' ' tag), seq))
+        (Files.Reads.FASTA !Params.map_reference);
+      Some (List.rev !res |> Array.of_list)
+    end in
+  (* The VCF, when asked for, knows the reference and its contigs only when the input is the
+      mapper's own *)
+  let vcf =
+    if !Params.vcf = "" then
+      None
+    else begin
+      let oc = open_out !Params.vcf in
+      Vcf.header ?reference:(if reference = None then None else Some !Params.map_reference)
+        ?contigs:(Option.map (Array.map (fun (name, seq) -> name, String.length seq)) reference)
+        ~source:("SiNPle " ^ SiNPle.Info.info.version) ~parameters ~sample:!Params.vcf_sample ()
+        |> output_string oc;
+      Some oc
+    end in
   let call pileup =
-    Printf.fprintf output "%s\n%!" (Genotype.from_pileup pileup parameters |> Genotype.to_sinple) in
-  if !Params.map_reference = "" then begin
-    try
+    let genotype = Genotype.from_pileup pileup parameters in
+    Printf.fprintf output "%s\n%!" (Genotype.to_sinple genotype);
+    Option.iter
+      (fun oc ->
+        Vcf.record ~min_posterior:!Params.vcf_min_posterior genotype
+          |> Option.iter (Printf.fprintf oc "%s\n"))
+      vcf in
+  begin match reference with
+  | None ->
+    begin try
       while true do
         Pileup.from_mpileup_line ?strand (input_line input) |> call
       done
     with End_of_file ->
       ()
-  end else begin
-    (* The reference the reads were mapped to, its sequences named as the mapper names them *)
-    let reference = ref [] in
-    Files.Reads.iter ~linter:Fun.id ~verbose:false
-      (fun (_, _, { Files.Base.Read.tag; seq; _ }) ->
-        List.accum reference (List.hd (String.split_on_char ' ' tag), seq))
-      (Files.Reads.FASTA !Params.map_reference);
+    end
+  | Some reference ->
     Mpileup.Gem.iter ~qualities:true ~strata:!Params.strata ?strand
-      ~path:(if !Params.input_file = "" then "-" else !Params.input_file)
-      ~reference:(List.rev !reference |> Array.of_list)
+      ~path:(if !Params.input_file = "" then "-" else !Params.input_file) ~reference
       (fun summary -> Pileup.of_summary summary |> call)
       input
-  end
+  end;
+  Option.iter close_out vcf
 

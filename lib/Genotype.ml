@@ -39,6 +39,7 @@ include (
     type t = {
       seq: string;
       pos: int;
+      refr: string;
       info: genobase_t array
     }
     type parameters_t = {
@@ -228,7 +229,7 @@ include (
           else
             0)
         res;
-      { seq = pileup.Pileup.seq; pos = pileup.Pileup.pos; info = res }
+      { seq = pileup.Pileup.seq; pos = pileup.Pileup.pos; refr = pileup.Pileup.refr; info = res }
     let to_sinple { seq; pos; info } =
       let res = Buffer.create 512 in
       Buffer.add_string res (Printf.sprintf "%s\t%d" seq pos);
@@ -244,6 +245,7 @@ include (
     let [@warning "-27"] from_sinple file =
       { seq = "";
         pos = 0;
+        refr = "";
         info = [||] }
     let [@warning "-27"] recalibrate_p_values obj x = obj
   end: sig
@@ -256,6 +258,8 @@ include (
     type t = {
       seq: string;
       pos: int;
+      (* The reference base, as the input said it: one base, or N where the input did not know *)
+      refr: string;
       info: genobase_t array
     }
     type parameters_t = {
