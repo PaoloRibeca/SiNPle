@@ -185,15 +185,16 @@ let () =
     [ "--vcf" ],
       Some "<vcf_file>",
       [ "also write the calls as VCF to the given file: one record per site";
-        "where a genotype other than the reference base's has a posterior";
-        "at or above --vcf-minimum-posterior, those genotypes being its";
-        "alternate alleles. The reference base must be known, which it is";
-        "with --map and with an mpileup made with -f" ],
+        "where some read said something other than the reference base, every";
+        "such genotype being an alternate allele, and FILTER PASS when one of";
+        "them has a posterior at or above --vcf-minimum-posterior. The";
+        "reference base must be known, which it is with --map and with an";
+        "mpileup made with -f" ],
       TA.Default (fun () -> if !Params.vcf = "" then "<none>" else !Params.vcf),
       (fun _ -> Params.vcf := TA.get_parameter ());
     [ "--vcf-minimum-posterior" ],
       Some "<fraction>",
-      [ "the posterior a genotype needs to be an alternate allele in the VCF" ],
+      [ "the posterior some alternate allele needs for its record to PASS" ],
       TA.Default (fun () -> string_of_float !Params.vcf_min_posterior),
       (fun _ -> Params.vcf_min_posterior := TA.get_parameter_float_fraction ());
     [ "--vcf-sample" ],
@@ -259,7 +260,8 @@ let () =
       let oc = open_out !Params.vcf in
       Vcf.header ?reference:(if reference = None then None else Some !Params.map_reference)
         ?contigs:(Option.map (Array.map (fun (name, seq) -> name, String.length seq)) reference)
-        ~source:("SiNPle " ^ SiNPle.Info.info.version) ~parameters ~sample:!Params.vcf_sample ()
+        ~min_posterior:!Params.vcf_min_posterior ~source:("SiNPle " ^ SiNPle.Info.info.version)
+        ~parameters ~sample:!Params.vcf_sample ()
         |> output_string oc;
       Some oc
     end in

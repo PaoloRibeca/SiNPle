@@ -1,8 +1,8 @@
 (*
     Vcf.ml -- (c) 2026 Paolo Ribeca, <paolo.ribeca@gmail.com>
 
-    The model's calls as VCF: a header, and one record per site where some genotype other than
-    the reference's is real enough.
+    The model's calls as VCF: a header, and one record per site where the reads said something
+    other than the reference base, filtered by how real it is.
 
     This program was designed and developed by the author(s),
     with the assistance of the following AI tool(s):
@@ -29,14 +29,15 @@ open Better
 
 include (
   struct
-    (* WHAT A RECORD SAYS, AND WHAT IT LEAVES OUT. A site is written when at least one genotype
-        other than the reference base's has a posterior of being real at or above the threshold;
-        those genotypes are its alternate alleles, and the record carries, for each, how many
-        reads said it, what fraction of the reads voting for a base that is, their mean base
-        quality and the posterior, and for the site the reads voting and those voting for the
-        reference base. Genotypes below the threshold are not written: a VCF is a list of calls,
-        and an error allele at every deep site would drown them; the same model run without a
-        threshold is SiNPle's own format. An N called by the reads is not an allele.
+    (* WHAT A RECORD SAYS. A site is written when some read said something other than the
+        reference base there; every such genotype is an alternate allele, and the record carries,
+        for each, how many reads said it, what fraction of the reads voting for a base that is,
+        their mean base quality and the posterior of its being real, and for the site the reads
+        voting and those voting for the reference base. The threshold does not choose the
+        records but marks them, in the column the format keeps for that: PASS when some alternate
+        allele has a posterior at or above it, the filter's name otherwise, so that everything the
+        model saw is there and the reader filters as SiNPle's own format lets them. An N called by
+        the reads is not an allele.
        THE ALLELES ARE ANCHORED ON THE REFERENCE BASE, as the format wants: a substitution is REF
         the base, ALT the other; an insertion after the site is REF the base, ALT the base then the
         inserted sequence; a deletion is REF the base then the deleted sequence, ALT the base. A
@@ -45,6 +46,7 @@ include (
         the longest, all of them starting at the same base of the reference *)
     let quality_of posterior =
       if posterior >= 1. then 999. else min 999. (-10. *. log10 (1. -. posterior))
+    let filter = "LowPosterior"
     let record ?(min_posterior = 0.95) (g: Genotype.t) =
       let refr = if g.refr = "" then "N" else String.sub g.refr 0 1 in
       let is_base symbol = String.length symbol = 1 && symbol <> "N" in
@@ -52,7 +54,7 @@ include (
         Array.to_list g.info
           |> List.filter
             (fun (gb: Genotype.genobase_t) ->
-              gb.p_value >= min_posterior && gb.symbol <> refr
+              gb.counts > 0 && gb.symbol <> refr
               && (is_base gb.symbol || gb.symbol.[0] = '+' || gb.symbol.[0] = '-')) in
       if alts = [] then
         None
@@ -85,8 +87,9 @@ include (
           g.info;
         let per_alt f = List.map f alts |> String.concat "," in
         let quality = List.fold_left (fun acc (gb: Genotype.genobase_t) -> max acc gb.p_value) 0. alts in
-        Printf.sprintf "%s\t%d\t.\t%s\t%s\t%.4g\tPASS\tDP=%d;RD=%d;AC=%s;AF=%s;BQ=%s;PP=%s\tDP:AD\t%d:%d,%s"
-          g.seq g.pos ref_allele (per_alt alt_allele) (quality_of quality) !voting !reference
+        Printf.sprintf "%s\t%d\t.\t%s\t%s\t%.4g\t%s\tDP=%d;RD=%d;AC=%s;AF=%s;BQ=%s;PP=%s\tDP:AD\t%d:%d,%s"
+          g.seq g.pos ref_allele (per_alt alt_allele) (quality_of quality)
+          (if quality >= min_posterior then "PASS" else filter) !voting !reference
           (per_alt (fun gb -> string_of_int gb.counts))
           (per_alt (fun gb -> Printf.sprintf "%.4g" (if !voting = 0 then 0. else float_of_int gb.counts /. float_of_int !voting)))
           (per_alt
@@ -99,7 +102,8 @@ include (
     (* The header: the source and its parameters, the reference and its contigs when they are
         known -- they are with the mapper's own output, and not from a pileup, which names a
         contig only when its first line comes -- and what the records' fields mean *)
-    let header ?reference ?(contigs = [||]) ~source ~(parameters: Genotype.parameters_t) ~sample () =
+    let header ?reference ?(contigs = [||]) ?(min_posterior = 0.95) ~source
+        ~(parameters: Genotype.parameters_t) ~sample () =
       let buf = Buffer.create 2048 in
       let t = Unix.localtime (Unix.time ()) in
       Printf.bprintf buf "##fileformat=VCFv4.3\n##fileDate=%04d%02d%02d\n##source=%s\n"
@@ -114,6 +118,9 @@ include (
         parameters.pcr_error_rate_substitution parameters.pcr_error_rate_indel
         parameters.error_rate_substitution parameters.error_rate_indel_short
         parameters.error_rate_indel_long;
+      Printf.bprintf buf
+        "##FILTER=<ID=%s,Description=\"No alternate allele has a posterior at or above %g\">\n" filter
+        min_posterior;
       Buffer.add_string buf
         "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Reads voting for a base at the site\">\n\
          ##INFO=<ID=RD,Number=1,Type=Integer,Description=\"Reads voting for the reference base\">\n\
@@ -126,14 +133,16 @@ include (
       Printf.bprintf buf "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t%s\n" sample;
       Buffer.contents buf
   end: sig
-    (* The record for a site, if some genotype other than the reference base's has a posterior
-        at or above the threshold: CHROM POS ID REF ALT QUAL FILTER INFO FORMAT and one sample,
-        QUAL being the Phred-scaled complement of the best alternate allele's posterior *)
+    (* The record for a site, if some read said something other than the reference base there:
+        CHROM POS ID REF ALT QUAL FILTER INFO FORMAT and one sample, QUAL being the Phred-scaled
+        complement of the best alternate allele's posterior and FILTER PASS when that posterior
+        is at or above the threshold, the filter's name otherwise *)
     val record: ?min_posterior:float -> Genotype.t -> string option
     (* The header, ending with the column line naming the one sample. The reference's path and
-        its contigs, as (name, length), are written when given *)
+        its contigs, as (name, length), are written when given; the filter is defined with the
+        threshold the records were marked at *)
     val header:
-      ?reference:string -> ?contigs:(string * int) array -> source:string ->
+      ?reference:string -> ?contigs:(string * int) array -> ?min_posterior:float -> source:string ->
       parameters:Genotype.parameters_t -> sample:string -> unit -> string
   end
 )

@@ -81,7 +81,7 @@ With GEM, no BAM or pileup is needed: `gem3-mapper -F MAP` writes every placemen
 $ gem3-mapper -I reference.gem -i reads.fastq -M all -F MAP | SiNPle --map reference.fasta > variants.txt
 ```
 
-The calls can also be written as VCF, beside the table, with `--vcf`: one record per site where a genotype other than the reference base's has a posterior at or above `--vcf-minimum-posterior` (0.95 by default), those genotypes being the site's alternate alleles, anchored on the reference base as the format wants; each record carries the reads voting at the site and for the reference base, and for each alternate allele its reads, their fraction, their mean base quality and the posterior, with one sample column (`--vcf-sample`) of allele depths. The reference base must be known, which it is with `--map` and with an mpileup made with `-f`.
+The calls can also be written as VCF, beside the table, with `--vcf`: one record per site where some read said something other than the reference base, every such genotype being an alternate allele, anchored on the reference base as the format wants; each record carries the reads voting at the site and for the reference base, and for each alternate allele its reads, their fraction, their mean base quality and the posterior, with one sample column (`--vcf-sample`) of allele depths. As in the table, nothing is left out: the threshold `--vcf-minimum-posterior` (0.95 by default) marks the records rather than choosing them, `FILTER` being `PASS` when some alternate allele has a posterior at or above it and `LowPosterior` otherwise. The reference base must be known, which it is with `--map` and with an mpileup made with `-f`.
 
 ```
 $ samtools mpileup -f reference.fasta -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle --vcf variants.vcf > variants.txt
@@ -149,8 +149,8 @@ SiNPle [OPTIONS]
 | `-m`<br>`--map` | _reference\_fasta\_file_ |  the input is what gem3\-mapper \-F MAP wrote for the reads mapped to the given reference rather than an mpileup: what the reads say about each position is read off it directly\. The reads must have been mapped from FASTQ, as the model needs their qualities | <ins>default=<mark>_&lt;none&gt;_</mark></ins> |
 | `--strata` | _positive\_integer_ |  with \-\-map, count only the placements in the first that many non\-empty strata of each read, a stratum being its placements with the same number of errors: 1 keeps its best placements alone | <ins>default=<mark>_1_</mark></ins> |
 | `-o`<br>`--output` | _output\_file_ |  name of output file | <ins>default=<mark>_&lt;stdout&gt;_</mark></ins> |
-| `--vcf` | _vcf\_file_ |  also write the calls as VCF to the given file: one record per site where a genotype other than the reference base's has a posterior at or above \-\-vcf\-minimum\-posterior, those genotypes being its alternate alleles\. The reference base must be known, which it is with \-\-map and with an mpileup made with \-f | <ins>default=<mark>_&lt;none&gt;_</mark></ins> |
-| `--vcf-minimum-posterior` | _fraction_ |  the posterior a genotype needs to be an alternate allele in the VCF | <ins>default=<mark>_0\.95_</mark></ins> |
+| `--vcf` | _vcf\_file_ |  also write the calls as VCF to the given file: one record per site where some read said something other than the reference base, every such genotype being an alternate allele, and FILTER PASS when one of them has a posterior at or above \-\-vcf\-minimum\-posterior\. The reference base must be known, which it is with \-\-map and with an mpileup made with \-f | <ins>default=<mark>_&lt;none&gt;_</mark></ins> |
+| `--vcf-minimum-posterior` | _fraction_ |  the posterior some alternate allele needs for its record to PASS | <ins>default=<mark>_0\.95_</mark></ins> |
 | `--vcf-sample` | _name_ |  the name of the VCF's one sample | <ins>default=<mark>_sample_</mark></ins> |
 
 **Miscellaneous**
