@@ -1,5 +1,5 @@
 (*
-    Vcf.ml -- (c) 2026 Paolo Ribeca, <paolo.ribeca@gmail.com>
+    VCF.ml -- (c) 2026 Paolo Ribeca, <paolo.ribeca@gmail.com>
 
     The model's calls as VCF: a header, and one record per site where the reads said something
     other than the reference base, filtered by how real it is.

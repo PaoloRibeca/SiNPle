@@ -258,7 +258,7 @@ let () =
       None
     else begin
       let oc = open_out !Params.vcf in
-      Vcf.header ?reference:(if reference = None then None else Some !Params.map_reference)
+      VCF.header ?reference:(if reference = None then None else Some !Params.map_reference)
         ?contigs:(Option.map (Array.map (fun (name, seq) -> name, String.length seq)) reference)
         ~min_posterior:!Params.vcf_min_posterior ~source:("SiNPle " ^ SiNPle.Info.info.version)
         ~parameters ~sample:!Params.vcf_sample ()
@@ -270,7 +270,7 @@ let () =
     Printf.fprintf output "%s\n%!" (Genotype.to_sinple genotype);
     Option.iter
       (fun oc ->
-        Vcf.record ~min_posterior:!Params.vcf_min_posterior genotype
+        VCF.record ~min_posterior:!Params.vcf_min_posterior genotype
           |> Option.iter (Printf.fprintf oc "%s\n"))
       vcf in
   begin match reference with
