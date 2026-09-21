@@ -1,5 +1,5 @@
 (*
-    Caller.ml -- (c) 2017-2026 Luca Ferretti, Chandana Tennakoon, Paolo Ribeca
+    SiNPle.ml -- (c) 2017-2026 Luca Ferretti, Chandana Tennakoon, Paolo Ribeca
 
     The SiNPle command: calls the model on every position of its input, which is
     an mpileup, as samtools mpileup writes it, or, with --map, what gem3-mapper

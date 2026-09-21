@@ -91,9 +91,9 @@ mkdir "$ROOT/.build"
 
 #FLAGS="--verbose"
 
-"${DUNE[@]}" --profile="$PROFILE" bin/Caller.exe $FLAGS
+"${DUNE[@]}" --profile="$PROFILE" bin/SiNPle.exe $FLAGS
 
-cp "$ROOT/_build/default/bin/Caller.exe" "$ROOT/.build/SiNPle"
+cp "$ROOT/_build/default/bin/SiNPle.exe" "$ROOT/.build/SiNPle"
 
 chmod 755 "$ROOT"/.build/*
 

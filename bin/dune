@@ -14,10 +14,11 @@
   (release-static
     (ocamlopt_flags (:standard -O3 -ccopt -O3 -ccopt -static))))
 
-; The command is the module Caller, not SiNPle: the model is the library SiNPle
-; in lib/, and an executable module of the same name would shadow it
+; The command and the library share the name SiNPle: the executable module and
+; the library it links can, since a module's own name is not bound inside its
+; own body, so 'open SiNPle' here reaches the library, not this file
 (executable
- (name Caller)
+ (name SiNPle)
  (libraries str unix BiOCamLib SiNPle))
 
 ; No `public_names` beside the `install` stanza: both generate
@@ -27,4 +28,4 @@
 (install
  (section bin)
  (files
-  (Caller.exe as SiNPle)))
+  (SiNPle.exe as SiNPle)))
