@@ -94,7 +94,7 @@ include (
           (per_alt (fun gb -> Printf.sprintf "%.4g" (if !voting = 0 then 0. else float_of_int gb.counts /. float_of_int !voting)))
           (per_alt
             (fun gb ->
-              Printf.sprintf "%.3g" (if gb.counts = 0 then 0. else float_of_int (QualitiesDistribution.get_sum gb.quals) /. float_of_int gb.counts)))
+              Printf.sprintf "%.3g" (if gb.counts = 0 then 0. else float_of_int (Mpileup.Qualities.sum gb.quals) /. float_of_int gb.counts)))
           (per_alt (fun gb -> Printf.sprintf "%.3g" gb.p_value))
           !voting !reference (per_alt (fun gb -> string_of_int gb.counts))
         |> Option.some

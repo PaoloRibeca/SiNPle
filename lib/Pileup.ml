@@ -29,22 +29,17 @@
 open BiOCamLib
 open Better
 
-type qualities_distribution_t = int QualitiesDistribution.t
-
 include (
   struct
     type t = {
       seq: string;
       pos: int;
       refr: string;
-      info: (int * qualities_distribution_t) StringMap.t
+      info: (int * Mpileup.Qualities.t) StringMap.t
     }
     (* The reading is BiOCamLib's.  Mpileup.summarize counts a position into
-       genotypes over a dense histogram of qualities; what is rebuilt below is
-       the shape the model expects, rebuilt once per POSITION rather than once
-       per read: the conversion walks the qualities that are present, of which
-       there are a few dozen, where the counting walked the reads, of which
-       there are thousands.
+       genotypes over a histogram of qualities, and the model works on that
+       histogram as it comes.
        The strand is resolved by the reader and can no longer be resolved after
        it: a summary merges the two strands and uppercases what it keeps, so
        which of them is wanted has to be said before the counting rather than
@@ -52,17 +47,16 @@ include (
     let parsed_lines = ref 0
     let quals_of (g: Mpileup.Genotype.t) =
       match g.qualities with
-      | Some qs ->
-        let res = ref QualitiesDistribution.empty in
-        Mpileup.Qualities.iter (fun q c -> res := QualitiesDistribution.add q c !res) qs;
-        !res
+      | Some qs -> qs
       | None ->
         (* No quality is assigned by the machine to the presence of an indel,
            and this has always been recorded as a zero one.  It has to stay a
            zero rather than an absence: the cumulative distribution the p-value
            is taken against merges every genotype's qualities, an indel's
            included *)
-        QualitiesDistribution.singleton 0 g.count
+        let qs = Mpileup.Qualities.make () in
+        Mpileup.Qualities.add ~times:g.count qs 0;
+        qs
     let of_summary (summary: Mpileup.Summary.t) =
       { seq = summary.seq; pos = summary.pos; refr = String.make 1 summary.reference;
         info =
@@ -78,7 +72,7 @@ include (
       pos: int;
       refr: string;
       (* Genotypes are ordered lexicographically here *)
-      info: (int * qualities_distribution_t) StringMap.t
+      info: (int * Mpileup.Qualities.t) StringMap.t
     }
     (* From the summary of a position, whoever made it *)
     val of_summary: Mpileup.Summary.t -> t

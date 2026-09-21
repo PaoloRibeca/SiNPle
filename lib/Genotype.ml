@@ -33,7 +33,7 @@ include (
     type genobase_t = {
       symbol: string;
       counts: int;
-      quals: Pileup.qualities_distribution_t;
+      quals: Mpileup.Qualities.t;
       p_value: float
     }
     type t = {
@@ -138,13 +138,12 @@ include (
             end
           else begin
             (* Case of a SNP *)
-            let mean_acc = QualitiesDistribution.get_mean acc_quals
-            and mean_gb =
-              QualitiesDistribution.get_mean (QualitiesDistribution.get_tail ~fraction:tail_fraction gb.quals)
-            and var_acc = QualitiesDistribution.get_variance acc_quals in
+            let mean_acc = Mpileup.Qualities.mean acc_quals
+            and mean_gb = Mpileup.Qualities.mean_above_fraction gb.quals (1. -. tail_fraction)
+            and var_acc = Mpileup.Qualities.variance acc_quals in
             (* Variance cannot be zero *)
             let var_acc = max 1. var_acc in
-            let soq_gb = QualitiesDistribution.get_sum gb.quals in
+            let soq_gb = Mpileup.Qualities.sum gb.quals in
             let q_gb = (float_of_int soq_gb) /. 10.
             and pi = 4. *. atan 1. in
             exp begin
@@ -194,7 +193,7 @@ include (
           res := { symbol = symbol; counts = counts; quals = quals; p_value = 0. } :: !res)
         pileup.Pileup.info;
       (* In order to be able to compute the p-value we need the cumulative statistics *)
-      let acc_acgtn_counts = ref 0 and acc_quals = ref QualitiesDistribution.empty in
+      let acc_acgtn_counts = ref 0 and acc_quals = Mpileup.Qualities.make () in
       List.iter
         (fun { symbol; counts; quals; _ } ->
           begin match symbol.[0] with
@@ -205,9 +204,9 @@ include (
           | _ ->
             assert false
           end;
-          acc_quals := QualitiesDistribution.merge !acc_quals quals)
+          Mpileup.Qualities.merge_into ~into:acc_quals quals)
         !res;
-      let acc_acgtn_counts = !acc_acgtn_counts and acc_quals = !acc_quals in
+      let acc_acgtn_counts = !acc_acgtn_counts in
       let res =
         Array.of_list begin
           List.map
@@ -235,7 +234,7 @@ include (
       Buffer.add_string res (Printf.sprintf "%s\t%d" seq pos);
       Array.iter
         (fun { symbol; counts; quals; p_value } ->
-          let soq = QualitiesDistribution.get_sum quals in
+          let soq = Mpileup.Qualities.sum quals in
           Buffer.add_string res begin
             Printf.sprintf "\t%s\t%d\t%.3g\t%.3g"
               symbol counts (zero_if_div_by_zero soq counts) p_value
@@ -252,7 +251,7 @@ include (
     type genobase_t = {
       symbol: string;
       counts: int;
-      quals: Pileup.qualities_distribution_t;
+      quals: Mpileup.Qualities.t;
       p_value: float
     }
     type t = {
