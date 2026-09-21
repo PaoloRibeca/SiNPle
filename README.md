@@ -67,25 +67,28 @@ $ bash BUILD release-static
 
 ## 2. How to run it
 
-`SiNPle` reads as input the pileup format produced by commands such as `samtools mpileup`, or, with `--map`, the GEM mapper's own output.
+`SiNPle` chooses its input format with `--input-format` (`mpileup` by default), its output format with `--output-format` (`vcf` by default), and reads from standard input and writes to standard output unless `-i` and `-o` name files.
 
-An example of generating SiNPle variant calls from the bamfile example.bam would be
-
-```
-$ samtools mpileup -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle > variants.txt
-```
-
-With GEM, no BAM or pileup is needed: `gem3-mapper -F MAP` writes every placement of every read on the read's line, and `SiNPle` walks that against the reference the reads were mapped to, reading what each read says about each position directly. The reads must come from FASTQ, as the model needs their qualities; `--strata` says how many of a read's best strata of placements count (1 by default, its best placements alone), every placement in them counting, so that a read on several copies of a repeat is evidence at each of them.
+The input is either the pileup format produced by commands such as `samtools mpileup`, or, with `--input-format gem`, the GEM mapper's own output. The output is either a VCF, `SiNPle`'s own table with `--output-format sinple`, or both. A VCF to standard output is thus the shortest invocation:
 
 ```
-$ gem3-mapper -I reference.gem -i reads.fastq -M all -F MAP | SiNPle --map reference.fasta > variants.txt
+$ samtools mpileup -f reference.fasta -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle > variants.vcf
 ```
 
-The calls can also be written as VCF, beside the table, with `--vcf`: one record per site where some read said something other than the reference base, every such genotype being an alternate allele, anchored on the reference base as the format wants; each record carries the reads voting at the site and for the reference base, and for each alternate allele its reads, their fraction, their mean base quality and the posterior, with one sample column (`--vcf-sample`) of allele depths. As in the table, nothing is left out: the threshold `--vcf-minimum-posterior` (0.95 by default) marks the records rather than choosing them, `FILTER` being `PASS` when some alternate allele has a posterior at or above it and `LowPosterior` otherwise. The reference base must be known, which it is with `--map` and with an mpileup made with `-f`.
+With GEM, no BAM or pileup is needed: `gem3-mapper -F MAP` writes every placement of every read on the read's line, and `SiNPle` walks that against the reference the reads were mapped to (`-r`), reading what each read says about each position directly. The reads must come from FASTQ, as the model needs their qualities; `--strata` says how many of a read's best strata of placements count (1 by default, its best placements alone), every placement in them counting, so that a read on several copies of a repeat is evidence at each of them. The shorthand `--map <reference>` is `--input-format gem --reference <reference>`:
 
 ```
-$ samtools mpileup -f reference.fasta -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle --vcf variants.vcf > variants.txt
+$ gem3-mapper -I reference.gem -i reads.fastq -M all -F MAP | SiNPle --map reference.fasta > variants.vcf
 ```
+
+`--output-format both` writes the table and the VCF together. Then `-o` is a prefix that gains `.sinple` and `.vcf`, unless it names a device under `/dev/` or is left unspecified, when the two are written to it as they are:
+
+```
+$ samtools mpileup -f reference.fasta -d 1000000 -a -A -B -Q 0 -x example.bam | SiNPle --output-format both -o run
+    # writes run.sinple and run.vcf
+```
+
+In the VCF, each record is a site where some read said something other than the reference base, every such genotype being an alternate allele, anchored on the reference base as the format wants; the record carries the reads voting at the site and for the reference base, and for each alternate allele its reads, their fraction, their mean base quality and the posterior, with one sample column (`--vcf-sample`) of allele depths. As in the table, nothing is left out: the threshold `--vcf-minimum-posterior` (0.95 by default) marks the records rather than choosing them, `FILTER` being `PASS` when some alternate allele has a posterior at or above it and `LowPosterior` otherwise. The reference base must be known, which it is with `--map` and with an mpileup made with `-f`.
   
 ## 3. Interpreting the output
 
@@ -141,21 +144,29 @@ SiNPle [OPTIONS]
 | `--error-rate-indel-long` | _non\_negative\_float_ |  prior estimate of error rate for sequencing-generated indels of length &gt;1 | <ins>default=<mark>_1e-06_</mark></ins> |
 | `-s`<br>`-S`<br>`--strandedness` | _forward&#124;reverse&#124;both_ |  strands to be taken into account for counts | <ins>default=<mark>_both_</mark></ins> |
 
-**Input/Output**
+**Input**
 
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
-| `-i`<br>`--input` | _input\_file_ |  name of input file \(in mpileup format, or with \-\-map in GEM MAP format\) | <ins>default=<mark>_&lt;stdin&gt;_</mark></ins> |
-| `-m`<br>`--map` | _reference\_fasta\_file_ |  the input is what gem3\-mapper \-F MAP wrote for the reads mapped to the given reference rather than an mpileup: what the reads say about each position is read off it directly\. The reads must have been mapped from FASTQ, as the model needs their qualities | <ins>default=<mark>_&lt;none&gt;_</mark></ins> |
-| `--strata` | _positive\_integer_ |  with \-\-map, count only the placements in the first that many non\-empty strata of each read, a stratum being its placements with the same number of errors: 1 keeps its best placements alone | <ins>default=<mark>_1_</mark></ins> |
-| `-o`<br>`--output` | _output\_file_ |  name of output file | <ins>default=<mark>_&lt;stdout&gt;_</mark></ins> |
-| `--vcf` | _vcf\_file_ |  also write the calls as VCF to the given file: one record per site where some read said something other than the reference base, every such genotype being an alternate allele, and FILTER PASS when one of them has a posterior at or above \-\-vcf\-minimum\-posterior\. The reference base must be known, which it is with \-\-map and with an mpileup made with \-f | <ins>default=<mark>_&lt;none&gt;_</mark></ins> |
-| `--vcf-minimum-posterior` | _fraction_ |  the posterior some alternate allele needs for its record to PASS | <ins>default=<mark>_0\.95_</mark></ins> |
+| `-f`<br>`--input-format` | _mpileup&#124;gem_ |  format of the input: an mpileup, as samtools mpileup writes it, or what gem3-mapper -F MAP wrote for the reads mapped to the reference given with -r, walked against it directly\. The reads must have been mapped from FASTQ, as the model needs their qualities | <ins>default=<mark>_mpileup_</mark></ins> |
+| `-i`<br>`--input` | _input\_file_ |  name of the input file | <ins>default=<mark>_&lt;stdin&gt;_</mark></ins> |
+| `-r`<br>`--reference` | _reference\_fasta\_file_ |  the reference the reads were mapped to, needed and used only when the input format is `gem` | <ins>default=<mark>_&lt;none&gt;_</mark></ins> |
+| `-m`<br>`--map` | _reference\_fasta\_file_ |  shorthand for `--input-format gem --reference <reference_fasta_file>` |  |
+| `--strata` | _positive\_integer_ |  with the `gem` input format, count only the placements in the first that many non-empty strata of each read, a stratum being its placements with the same number of errors: 1 keeps its best alone | <ins>default=<mark>_1_</mark></ins> |
+
+**Output**
+
+| Option | Argument(s) | Effect | Note(s) |
+|-|-|-|-|
+| `-F`<br>`--output-format` | _sinple&#124;vcf&#124;both_ |  format of the output: SiNPle's own table, a VCF, or both\. When both, \-o is a prefix that gains `.sinple` and `.vcf`, unless it names a device under `/dev/` or is left unspecified, when both are written there as they are | <ins>default=<mark>_vcf_</mark></ins> |
+| `-o`<br>`--output` | _output\_file\_or\_prefix_ |  name of the output file, or its prefix when the output format is `both` | <ins>default=<mark>_&lt;stdout&gt;_</mark></ins> |
+| `--vcf-minimum-posterior` | _fraction_ |  in the VCF, the posterior some alternate allele needs for its record to PASS rather than be marked LowPosterior | <ins>default=<mark>_0\.95_</mark></ins> |
 | `--vcf-sample` | _name_ |  the name of the VCF's one sample | <ins>default=<mark>_sample_</mark></ins> |
 
 **Miscellaneous**
 
 | Option | Argument(s) | Effect | Note(s) |
 |-|-|-|-|
+| `-v`<br>`--verbose` |  |  set verbose execution | <ins>default=<mark>_false_</mark></ins> |
 | `-V`<br>`--version` |  |  print version and exit |  |
 | `-h`<br>`--help` |  |  print syntax and exit |  |

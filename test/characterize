@@ -75,7 +75,8 @@ for entry in "${CASES[@]}"; do
     || { echo "$SELF: $bam not found" >&2; exit 1; }
   echo "  $name ..."
   mpileup_of "$bam" 2>/dev/null > "$scratch/$name.pileup"
-  "$BINARY" < "$scratch/$name.pileup" > "$scratch/$name.out"
+  # What is pinned is the model's own table, asked for by name: the default output is a VCF
+  "$BINARY" --output-format sinple < "$scratch/$name.pileup" > "$scratch/$name.out"
   if (( RECORD )); then
     xz -c "$scratch/$name.out" > "$EXPECTED/$name.sinple.xz"
     echo "    recorded $(wc -l < "$scratch/$name.out") lines"

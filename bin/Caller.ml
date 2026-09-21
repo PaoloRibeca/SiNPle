@@ -53,15 +53,53 @@ open SiNPle
     q_eff_indel=q_indel
 *)
 
+(* The format the reads come in: an mpileup, as samtools writes it, or what
+   gem3-mapper -F MAP wrote for the reads mapped to a reference *)
+module Input_format =
+  struct
+    type t =
+      | Mpileup
+      | Gem
+    let of_string = function
+      | "mpileup" | "pileup" -> Mpileup
+      | "gem" | "GEM" | "map" | "MAP" -> Gem
+      | w -> Exception.raise_unrecognized_initializer __FUNCTION__ "input format" w
+    let to_string = function
+      | Mpileup -> "mpileup"
+      | Gem -> "gem"
+  end
+
+(* What the calls are written as: SiNPle's own table, a VCF, or both *)
+module Output_format =
+  struct
+    type t =
+      | Sinple
+      | Vcf
+      | Both
+    let of_string = function
+      | "sinple" | "SiNPle" | "table" -> Sinple
+      | "vcf" | "VCF" -> Vcf
+      | "both" | "BOTH" -> Both
+      | w -> Exception.raise_unrecognized_initializer __FUNCTION__ "output format" w
+    let to_string = function
+      | Sinple -> "sinple"
+      | Vcf -> "vcf"
+      | Both -> "both"
+    let wants_sinple = function Sinple | Both -> true | Vcf -> false
+    let wants_vcf = function Vcf | Both -> true | Sinple -> false
+  end
+
 module Defaults =
   struct
+    let input_format = Input_format.Mpileup
     let input_file = ""
-    let output_file = ""
-    let map_reference = ""
+    let reference = ""
     let strata = 1
-    let vcf = ""
+    let output_format = Output_format.Vcf
+    let output_file = ""
     let vcf_min_posterior = 0.95
     let vcf_sample = "sample"
+    let verbose = false
     let theta = 0.001
     let q_indel_short = 35
     let q_indel_long = 45
@@ -74,13 +112,15 @@ module Defaults =
 
 module Params =
   struct
+    let input_format = ref Defaults.input_format
     let input_file = ref Defaults.input_file
-    let output_file = ref Defaults.output_file
-    let map_reference = ref Defaults.map_reference
+    let reference = ref Defaults.reference
     let strata = ref Defaults.strata
-    let vcf = ref Defaults.vcf
+    let output_format = ref Defaults.output_format
+    let output_file = ref Defaults.output_file
     let vcf_min_posterior = ref Defaults.vcf_min_posterior
     let vcf_sample = ref Defaults.vcf_sample
+    let verbose = ref Defaults.verbose
     let theta = ref Defaults.theta
     let theta_indel = ref (Defaults.theta /. 10.)
     let q_indel_short = ref Defaults.q_indel_short
@@ -156,45 +196,58 @@ let () =
       [ "strands to be taken into account for counts" ],
       TA.Default (fun () -> Strandedness.to_string !Params.strandedness),
       (fun _ -> Params.strandedness := Strandedness.of_string (TA.get_parameter ()));
-    TA.make_separator "Input/Output";
+    TA.make_separator "Input";
+    [ "-f"; "--input-format" ],
+      Some "mpileup|gem",
+      [ "format of the input: an mpileup, as samtools mpileup writes it, or";
+        "what gem3-mapper -F MAP wrote for the reads mapped to the reference";
+        "given with -r, walked against it directly. The reads must have been";
+        "mapped from FASTQ, as the model needs their qualities" ],
+      TA.Default (fun () -> Input_format.to_string !Params.input_format),
+      (fun _ -> Params.input_format := Input_format.of_string (TA.get_parameter ()));
     [ "-i"; "--input" ],
       Some "<input_file>",
-      [ "name of input file (in mpileup format, or with --map in GEM MAP format)" ],
+      [ "name of the input file" ],
       TA.Default (fun () -> if !Params.input_file = "" then "<stdin>" else !Params.input_file),
-      (fun _ -> Params.input_file := TA.get_parameter() );
+      (fun _ -> Params.input_file := TA.get_parameter ());
+    [ "-r"; "--reference" ],
+      Some "<reference_fasta_file>",
+      [ "the reference the reads were mapped to, needed and used only when the";
+        "input format is 'gem'" ],
+      TA.Default (fun () -> if !Params.reference = "" then "<none>" else !Params.reference),
+      (fun _ -> Params.reference := TA.get_parameter ());
     [ "-m"; "--map" ],
       Some "<reference_fasta_file>",
-      [ "the input is what gem3-mapper -F MAP wrote for the reads mapped";
-        "to the given reference rather than an mpileup: what the reads say";
-        "about each position is read off it directly. The reads must have";
-        "been mapped from FASTQ, as the model needs their qualities" ],
-      TA.Default (fun () -> if !Params.map_reference = "" then "<none>" else !Params.map_reference),
-      (fun _ -> Params.map_reference := TA.get_parameter ());
+      [ "shorthand for '--input-format gem --reference <reference_fasta_file>'" ],
+      TA.Optional,
+      (fun _ ->
+        Params.input_format := Input_format.Gem;
+        Params.reference := TA.get_parameter ());
     [ "--strata" ],
       Some "<positive_integer>",
-      [ "with --map, count only the placements in the first that many";
-        "non-empty strata of each read, a stratum being its placements";
-        "with the same number of errors: 1 keeps its best placements alone" ],
+      [ "with the 'gem' input format, count only the placements in the first";
+        "that many non-empty strata of each read, a stratum being its";
+        "placements with the same number of errors: 1 keeps its best alone" ],
       TA.Default (fun () -> string_of_int !Params.strata),
       (fun _ -> Params.strata := TA.get_parameter_int_pos ());
+    TA.make_separator "Output";
+    [ "-F"; "--output-format" ],
+      Some "sinple|vcf|both",
+      [ "format of the output: SiNPle's own table, a VCF, or both. When both,";
+        "-o is a prefix that gains '.sinple' and '.vcf', unless it names a";
+        "device under '/dev/' or is left unspecified, when both are written";
+        "there as they are" ],
+      TA.Default (fun () -> Output_format.to_string !Params.output_format),
+      (fun _ -> Params.output_format := Output_format.of_string (TA.get_parameter ()));
     [ "-o"; "--output" ],
-      Some "<output_file>",
-      [ "name of output file" ],
+      Some "<output_file_or_prefix>",
+      [ "name of the output file, or its prefix when the output format is 'both'" ],
       TA.Default (fun () -> if !Params.output_file = "" then "<stdout>" else !Params.output_file),
-      (fun _ -> Params.output_file := TA.get_parameter() );
-    [ "--vcf" ],
-      Some "<vcf_file>",
-      [ "also write the calls as VCF to the given file: one record per site";
-        "where some read said something other than the reference base, every";
-        "such genotype being an alternate allele, and FILTER PASS when one of";
-        "them has a posterior at or above --vcf-minimum-posterior. The";
-        "reference base must be known, which it is with --map and with an";
-        "mpileup made with -f" ],
-      TA.Default (fun () -> if !Params.vcf = "" then "<none>" else !Params.vcf),
-      (fun _ -> Params.vcf := TA.get_parameter ());
+      (fun _ -> Params.output_file := TA.get_parameter ());
     [ "--vcf-minimum-posterior" ],
       Some "<fraction>",
-      [ "the posterior some alternate allele needs for its record to PASS" ],
+      [ "in the VCF, the posterior some alternate allele needs for its record";
+        "to PASS rather than be marked LowPosterior" ],
       TA.Default (fun () -> string_of_float !Params.vcf_min_posterior),
       (fun _ -> Params.vcf_min_posterior := TA.get_parameter_float_fraction ());
     [ "--vcf-sample" ],
@@ -203,6 +256,11 @@ let () =
       TA.Default (fun () -> !Params.vcf_sample),
       (fun _ -> Params.vcf_sample := TA.get_parameter ());
     TA.make_separator "Miscellaneous";
+    [ "-v"; "--verbose" ],
+      None,
+      [ "set verbose execution" ],
+      TA.Default (fun () -> string_of_bool !Params.verbose),
+      (fun _ -> Params.verbose := true);
     [ "-V"; "--version" ],
       None,
       [ "print version and exit" ],
@@ -216,16 +274,6 @@ let () =
       TA.Optional,
       (fun _ -> TA.usage (); exit 0)
   ];
-  let input =
-    if !Params.input_file = "" then
-      stdin
-    else
-      open_in !Params.input_file
-  and output =
-    if !Params.output_file = "" then
-      stdout
-    else
-      open_out !Params.output_file in
   let parameters = {
     Genotype.theta = !Params.theta;
     theta_indel = !Params.theta_indel;
@@ -236,43 +284,62 @@ let () =
     error_rate_substitution = !Params.error_rate_substitution;
     error_rate_indel_short = !Params.error_rate_indel_short;
     error_rate_indel_long = !Params.error_rate_indel_long
-  } in
+  }
   (* Decided once: it is a parameter of the run, not of a position *)
-  let strand = Strandedness.to_strand !Params.strandedness in
-  (* The reference the reads were mapped to, its sequences named as the mapper names them *)
+  and strand = Strandedness.to_strand !Params.strandedness in
+  let input = if !Params.input_file = "" then stdin else open_in !Params.input_file in
+  (* The reference the reads were mapped to, read only for the 'gem' format, which cannot be walked
+      without it; its sequences are named as the mapper names them *)
   let reference =
-    if !Params.map_reference = "" then
-      None
-    else begin
+    match !Params.input_format with
+    | Input_format.Mpileup -> None
+    | Input_format.Gem ->
+      if !Params.reference = "" then begin
+        TA.usage ();
+        TA.parse_error "the 'gem' input format needs a reference, given with -r or --map"
+      end;
       let res = ref [] in
       Files.Reads.iter ~linter:Fun.id ~verbose:false
         (fun (_, _, { Files.Base.Read.tag; seq; _ }) ->
           List.accum res (List.hd (String.split_on_char ' ' tag), seq))
-        (Files.Reads.FASTA !Params.map_reference);
-      Some (List.rev !res |> Array.of_list)
-    end in
-  (* The VCF, when asked for, knows the reference and its contigs only when the input is the
-      mapper's own *)
-  let vcf =
-    if !Params.vcf = "" then
-      None
-    else begin
-      let oc = open_out !Params.vcf in
-      VCF.header ?reference:(if reference = None then None else Some !Params.map_reference)
+        (Files.Reads.FASTA !Params.reference);
+      Some (List.rev !res |> Array.of_list) in
+  (* Where the output goes: a single format takes -o as it is, stdout when it names none; 'both'
+      takes it as a prefix that gains '.sinple' and '.vcf', unless it names a device under '/dev/'
+      or was left unspecified, when the two share the one channel and go there as they are *)
+  let is_device w = String.length w >= 5 && String.sub w 0 5 = "/dev/" in
+  let channel_of = function "" -> stdout | name -> open_out name in
+  let o = !Params.output_file in
+  let sinple_oc, vcf_oc =
+    match !Params.output_format with
+    | Output_format.Sinple -> Some (channel_of o), None
+    | Output_format.Vcf -> None, Some (channel_of o)
+    | Output_format.Both ->
+      if o = "" || is_device o then
+        let oc = channel_of o in
+        Some oc, Some oc
+      else
+        Some (open_out (o ^ ".sinple")), Some (open_out (o ^ ".vcf")) in
+  (* The VCF's header, once before its records; the reference and its contigs are known only for
+      the 'gem' format, where the mapper named them *)
+  Option.iter
+    (fun oc ->
+      VCF.header ?reference:(Option.map (fun _ -> !Params.reference) reference)
         ?contigs:(Option.map (Array.map (fun (name, seq) -> name, String.length seq)) reference)
         ~min_posterior:!Params.vcf_min_posterior ~source:("SiNPle " ^ SiNPle.Info.info.version)
         ~parameters ~sample:!Params.vcf_sample ()
-        |> output_string oc;
-      Some oc
-    end in
+        |> output_string oc)
+    vcf_oc;
+  let positions = ref 0 in
   let call pileup =
+    incr positions;
     let genotype = Genotype.from_pileup pileup parameters in
-    Printf.fprintf output "%s\n%!" (Genotype.to_sinple genotype);
+    Option.iter (fun oc -> Genotype.to_sinple genotype |> Printf.fprintf oc "%s\n") sinple_oc;
     Option.iter
       (fun oc ->
         VCF.record ~min_posterior:!Params.vcf_min_posterior genotype
           |> Option.iter (Printf.fprintf oc "%s\n"))
-      vcf in
+      vcf_oc in
   begin match reference with
   | None ->
     begin try
@@ -288,5 +355,12 @@ let () =
       (fun summary -> Pileup.of_summary summary |> call)
       input
   end;
-  Option.iter close_out vcf
+  if !Params.input_file <> "" then
+    close_in input;
+  (* Close what was opened, once, leaving stdout alone; the two formats may share one channel *)
+  let same opt ch = match opt with Some x -> x == ch | None -> false in
+  Option.iter (fun oc -> if oc != stdout then close_out oc) sinple_oc;
+  Option.iter (fun oc -> if oc != stdout && not (same sinple_oc oc) then close_out oc) vcf_oc;
+  if !Params.verbose then
+    Printf.eprintf "Called %d %s\n%!" !positions (String.pluralize_int "position" !positions)
 
