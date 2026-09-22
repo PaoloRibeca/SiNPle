@@ -118,11 +118,11 @@ $ SiNPle -h
 ```
 in your terminal. You will see a header containing information about the version:
 ```
-This is SiNPle version 1.1.1-105 [25-Aug-2026]
- compiled against: BiOCamLib version 1.3.3-986 [15-Sep-2026]
+This is SiNPle version 1.2.0-155 [22-Sep-2026]
+ compiled against: BiOCamLib version 1.3.4-1057 [21-Sep-2026]
  (c) 2017-2019 Luca Ferretti <luca.ferretti@gmail.com>
      2017-2019 Chandana Tennakoon <drcyber@gmail.com>
-     2017-2024 Paolo Ribeca <paolo.ribeca@gmail.com>
+     2017-2026 Paolo Ribeca <paolo.ribeca@gmail.com>
 ```
 followed by detailed information. The general form(s) the command can be used is:
 ```
