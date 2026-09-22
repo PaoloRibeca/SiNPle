@@ -74,13 +74,13 @@ case "$PROFILE" in
     ;;
 esac
 
-# Emit version info, for SiNPle and for the BiOCamLib it vendors.  SiNPle's goes
+# Emit version info, for the BiOCamLib SiNPle vendors and for SiNPle.  SiNPle's goes
 # into its library, as SiNPle.Info, where the command and whatever else links the
 # library find it; --open is what lets it reach Tools.Argv, the module being
 # outside BiOCamLib.
-bash "$TOOLS/stamp-version" --root "$ROOT" --out "$ROOT/lib/Info.ml" --open SiNPle
 bash "$TOOLS/stamp-version" --root "$ROOT/BiOCamLib" --out "$ROOT/BiOCamLib/lib/Info.ml" \
   BiOCamLib AnnoTools Cophenetic FASTools NJ Octopus Parallel RC TREx Yggdrasill
+bash "$TOOLS/stamp-version" --root "$ROOT" --out "$ROOT/lib/Info.ml" --open SiNPle
 
 # Always erase both build directories to ensure peace of mind: a build that
 # fails must not leave the binary of an earlier one in .build, where 'package'
